@@ -5,8 +5,8 @@ import requests
 def main():
 	blocksLink = "https://minecraft.wiki/w/Block"
 	itemsLink = "https://minecraft.wiki/w/Item"
-	create_blocks_csv(blocksLink, 10, 20)
-
+	# create_blocks_csv(blocksLink, numAnalyze=10, numSkip=939)
+	create_items_csv(itemsLink, numAnalyze=30)
 
 blockValueDict = {#attribute title: index in blockInfo
 	"Name": 0,
@@ -33,6 +33,23 @@ blockValueDict = {#attribute title: index in blockInfo
 	"Flammable": 18,
 	"Catches fire from lava": 19
 }
+itemValueDict = {#attribute title: index in blockInfo
+	"Name": 0,
+	"Image url": 1,
+	"Page url": 2,
+
+	"Is redirect": 3,
+	"Redirect url": 4,
+	"Version added": 5,
+	"Version removed": 6,
+	#!!!Need to test to make sure these strings are right
+	"Rarity tier": 9,
+	"Renewable": 10,
+	"Stackable": 11,
+	"Durability": 12,
+	"Restores": 13,
+	"Status effects": 14,
+}
 toolDict = {#link extension: tool name
 	"/w/Pickaxe": "Pickaxe",
 	"/w/Wooden_Pickaxe": "Wooden Pickaxe",
@@ -44,17 +61,137 @@ toolDict = {#link extension: tool name
 	"/w/Shears": "Shears",
 	"/w/Shovel": "Shovel",
 	"/w/Hoe": "Hoe",
+	"/w/Brush": "Brush",
+	"/w/Bucket": "Bucket",
 }
 javaEditions = ["Java Edition pre-Classic", "Java Edition Classic", "Java Edition Indev",
 				"Java Edition Infdev", "Java Edition Alpha", "Java Edition Beta", "Java Edition"]
 
+#create items csv funcs
+def create_items_csv(link, numAnalyze=0, numSkip=0):
+	#create the output csv
+	with open("items.csv", 'w', newline='') as file:
+		writer = csv.writer(file)
+		#generate header line of csv
+		field = []
+		prevValue = -1
+		for value in list(itemValueDict.values()):
+			if prevValue==value:
+				continue
+			header = list(itemValueDict.keys())[list(itemValueDict.values()).index(value)]
+			field.append(header)
+			prevValue = value
+		writer.writerow(field)
+		#navigate the main page
+		req = requests.get(link)
+		contents = req.text
+		soup = BeautifulSoup(contents, 'html.parser')
+		#find the items lists
+		createEntitiesItemsDiv = soup.find(id="Items_that_create_blocks.2C_fluids_or_entities").parent.find_next_sibling('div')
+		useableItemsDiv = soup.find(id="Items_with_use_in_the_world").parent.find_next_sibling('div')
+		indirectUseItemsDiv = soup.find(id="Items_with_indirect_use_in_the_world").parent.find_next_sibling('div')
+		spawnEggsItemsDiv = soup.find(id="Spawn_eggs").parent.find_next_sibling('div')
+		# educationItemsDiv = soup.find(id="Exclusive_to_Minecraft_Education").parent.find_next_sibling('div')
+		# unimplementedItemsDiv = soup.find(id="Unimplemented_items").parent.find_next_sibling('div')
+		removedItemsDiv = soup.find(id="Removed_items").parent.find_next_sibling('div')
+		# jokeItemsDiv = soup.find(id="Joke_items").parent.find_next_sibling('div')
+		#add the items from these areas
+		divsToAnalyze = [createEntitiesItemsDiv, indirectUseItemsDiv, spawnEggsItemsDiv, removedItemsDiv]
+		add_items_from_divs(divsToAnalyze, writer, numAnalyze, numSkip)
+
+	print("items.csv successfully created!")
+def add_items_from_divs(divs, writer, numAnalyze=0, numSkip=0):
+	leftSkip = numSkip
+	leftAnalyze = numAnalyze
+	for divIndex in range(len(divs)):
+		conditions = add_items_from_div(divs[divIndex], writer, leftAnalyze, leftSkip)
+		leftAnalyze = conditions[0]
+		leftSkip = conditions[1]
+		if numAnalyze and leftAnalyze==0:
+			break
+def add_items_from_div(div, writer, numAnalyze=0, numSkip=0, findVersionRemoved=False):
+	#returns remaining number to analyze and skip as [numAnalyze, numSkip]
+	leftAnalyze = numAnalyze
+	leftSkip = numSkip
+	items = div.ul.find_all("li")  # entries
+	for index in range(len(items)):
+		# handle skip and exit conditions
+		if leftSkip:#check if there were ever any to skip
+			leftSkip-=1
+			continue
+		if numAnalyze:
+			if leftAnalyze==0:
+				return [0, 0]
+		item = items[index]
+		#check that this is not a BE only item
+		if len(item.find_all('sup'))!=0:
+			#there is a superscript, check if it is BE
+			superText = item.sup.i.span.a.text
+			if superText=="BE":
+				print("Item was skipped because it is a Bedrock Edition Exclusive")
+				continue
+		#find data for this item
+		imageUrl = item.find_all("a")[0]['href']
+		itemLinkTag = item.find_all("a")[1]  # returns the a tag that contains the link to its page
+		pageUrl = itemLinkTag['href']
+		itemName = itemLinkTag.contents[0].text
+		print(index, " ", itemName)  #debug
+
+		# get data from item's page
+		itemInfo = get_item_info("https://minecraft.wiki" + pageUrl, findVersionRemoved=findVersionRemoved)
+		# add data to the csv
+		csvLine = [itemName, imageUrl, pageUrl]
+		csvLine.extend(itemInfo)
+		writer.writerow(csvLine)
+		if numAnalyze:
+			leftAnalyze-=1
+	return [leftAnalyze, leftSkip]
+def get_item_info(link, parameterShift=3, findVersionRemoved=False):
+	#returns [is_redirect, redirect_url, version_added, version_removed,
+	#rarity_tier, renewable, stackable, durability, restores, status_effects]
+	#initialize itemInfo (info box info appended later)
+	itemInfo = [False, link, "?", "?"]
+	#navigate the item's page
+	req = requests.get(link, allow_redirects=True)
+	contents = req.text
+	soup = BeautifulSoup(contents, 'html.parser')
+	#check if there is a redirect
+	redirectInfo = get_redirect_info(soup, link)
+	itemInfo[itemValueDict["Is redirect"]-parameterShift]=redirectInfo[0]
+	itemInfo[itemValueDict["Redirect url"]-parameterShift]=redirectInfo[1]
+	#get data from History table
+	historyTable = soup.find('table', {"data-description": "History"})
+	if historyTable:
+		itemInfo[2] = get_version_added(historyTable)
+		if findVersionRemoved:
+			itemInfo[3] = get_version_removed(historyTable)
+	#get data from info box
+	infoBox = soup.find('table', "infobox-rows")
+	if infoBox:
+		infoBoxInfo = get_item_info_box_info(infoBox)
+		itemInfo.extend(infoBoxInfo)
+	#return the needed data as a list
+	return itemInfo
+def get_item_info_box_info(infoBox, parameterShift=7):#!!!Fill in parameter shift default
+	# returns [rarity_tier, renewable, stackable, durability, restores, status_effects]
+	info = ["?", "?", "?", "?", "?", "?"]
+	infoBoxValueAreas = infoBox.find_all('tr')
+	for valueArea in infoBoxValueAreas:
+		valueAreaInfo = get_info_box_value_area_info(valueArea)
+		valueTitle = valueAreaInfo[0]
+		value = valueAreaInfo[1]
+		if valueTitle in itemValueDict.keys():
+			info[itemValueDict[valueTitle]-parameterShift] = value
+		else:
+			print("Unknown item value title of ", valueTitle)
+	return info
+#create blocks csv funcs
 def create_blocks_csv(link, numAnalyze=0, numSkip=0):
 	#create the output csv
 	with open("blocks.csv", 'w', newline='') as file:
 		writer = csv.writer(file)
 		#generate header line of csv
 		field = []
-
 		prevValue = -1
 		for value in list(blockValueDict.values()):
 			if prevValue==value:
@@ -75,13 +212,19 @@ def create_blocks_csv(link, numAnalyze=0, numSkip=0):
 		# substitutionRemovedBlocksDiv = soup.find(id="Removed_through_substitution").parent.next_sibling.next_sibling
 		# metadataVariantBlocksDiv = soup.find(id="Extreme_metadata_variants").parent.next_sibling.next_sibling
 		# jokeBlocksDiv = soup.find(id="Joke_blocks").parent.next_sibling.next_sibling
-		#add the blocks from these areas
-		conditions = add_blocks_from_div(blocksDiv, writer, numAnalyze, numSkip)
-		if conditions[1]!=0:
-			conditions = add_blocks_from_div(technicalBlocksDiv, writer, conditions[0], conditions[1])
-		if conditions[1]!=0:
-			add_blocks_from_div(outrightRemovedBlocksDiv, writer, conditions[0], conditions[1], True)
-	print("block.csv successfully created!")
+
+		divsToAnalyze = [blocksDiv, technicalBlocksDiv, outrightRemovedBlocksDiv]
+		add_blocks_from_divs(divsToAnalyze, writer, numAnalyze, numSkip)
+	print("blocks.csv successfully created!")
+def add_blocks_from_divs(divs, writer, numAnalyze=0, numSkip=0):
+	leftSkip = numSkip
+	leftAnalyze = numAnalyze
+	for divIndex in range(len(divs)):
+		conditions = add_blocks_from_div(divs[divIndex], writer, leftAnalyze, leftSkip)
+		leftAnalyze = conditions[0]
+		leftSkip = conditions[1]
+		if numAnalyze and leftAnalyze==0:
+			break
 def add_blocks_from_div(blocksDiv, writer, numAnalyze=0, numSkip=0, findVersionRemoved=False):
 	#returns remaining number to analyze and skip as [numAnalyze, numSkip]
 	leftAnalyze = numAnalyze
@@ -95,9 +238,16 @@ def add_blocks_from_div(blocksDiv, writer, numAnalyze=0, numSkip=0, findVersionR
 		if numAnalyze:
 			if leftAnalyze==0:
 				return [0, 0]
-		# find block info
 		block = blocks[blockIndex]
-		imageUrl = block.find_all("a", "mw-file-description")[0]['href']
+		#check that this is not a BE only block
+		if len(block.find_all('sup'))!=0:
+			#there is a superscript, check if it is BE
+			superText = block.sup.i.span.a.text
+			if superText=="BE":
+				print("block was skipped because it is a Bedrock Edition Exclusive")
+				continue
+		#find data for this block
+		imageUrl = block.find_all("a")[0]['href']
 		blockLinkTag = block.find_all("a")[1]  # returns the a tag that contains the link to its page
 		pageUrl = blockLinkTag['href']
 		blockName = blockLinkTag.contents[0]
@@ -127,23 +277,18 @@ def get_block_info(link, parameterShift=3, findVersionRemoved=False):
 	blockInfo[blockValueDict["Redirect url"]-parameterShift]=redirectInfo[1]
 	#get data from History table
 	historyTable = soup.find('table', {"data-description": "History"})
-	blockInfo[2] = get_version_added(historyTable)
-	if findVersionRemoved:
-		blockInfo[3] = get_version_removed(historyTable)
+	if historyTable:
+		blockInfo[2] = get_version_added(historyTable)
+		if findVersionRemoved:
+			blockInfo[3] = get_version_removed(historyTable)
 	#get data from info box
 	infoBox = soup.find('table', "infobox-rows")
-	infoBoxInfo = get_info_box_info(infoBox)
-	blockInfo.extend(infoBoxInfo)
+	if infoBox:
+		infoBoxInfo = get_block_info_box_info(infoBox)
+		blockInfo.extend(infoBoxInfo)
 	#return the needed data as a list
 	return blockInfo
-#funcs called on block's page
-def get_redirect_info(soup, link):
-	newLink = get_canonical_link(soup)
-	isRedirect = False
-	if newLink!=link:
-		isRedirect = True
-	return [isRedirect, newLink]
-def get_info_box_info(infoBox, parameterShift=9):
+def get_block_info_box_info(infoBox, parameterShift=9):
 	# returns [rarity_tier, renewable, stackable, tool, blast_resistance,
 	# hardness, luminous, transparent, waterloggable, flammable, catches_fire_from_lava]
 	info = ["?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?"]
@@ -157,11 +302,23 @@ def get_info_box_info(infoBox, parameterShift=9):
 		else:
 			print("Unknown block value title of ", valueTitle)
 	return info
+#funcs called on item or block page
+def get_redirect_info(soup, link):
+	newLink = get_canonical_link(soup)
+	isRedirect = False
+	if newLink!=link:
+		isRedirect = True
+	return [isRedirect, newLink]
 def get_info_box_value_area_info(valueArea):
 	#returns an array [title,value] to indicate what this area is for and the value it holds
 	#valueArea is a <tr> tag inside of the info box
 	title = valueArea.th.text.replace('\n', '') #.text ignores <a> tags
-	value = valueArea.p.text.replace('\n', '')
+	try:
+		value = valueArea.p.text.replace('\n', '').encode('ascii', 'ignore').decode(
+			'ascii')  # removes invalid ascii characters
+	except AttributeError:
+		value = ""
+		print("Info box area could not be parsed for: ", title)
 	if (title=="Tool" or title=="Tools") and value=="":
 		#Tool section displays an image with a link to the corresponding tool, so we must extract this info from the link
 		toolLinkTags = valueArea.p.find_all('a')
@@ -174,8 +331,6 @@ def get_info_box_value_area_info(valueArea):
 					value += ", " + toolDict[toolLink]
 			else:
 				print("Unknown tool link of ", toolLink)
-	else:
-		value = valueArea.p.text.replace('\n', '').encode('ascii','ignore').decode('ascii')#removes invalid ascii characters
 	return [title, value]
 def get_version_added(historyTable):
 	historyRows = historyTable.find_all('tr')
@@ -192,7 +347,7 @@ def get_version_added(historyTable):
 			#This is a version row but no edition has been set
 			#cannot set edition before version
 			continue
-		else:
+		elif len(row.find_all('a'))>0:#version must be a link
 			#This is a version row and edition has been set
 			#check if this is an external link (AKA, not a valid version)
 			if ('class' in row.a.attrs) and ("external" in row.a['class']):
@@ -272,7 +427,7 @@ def is_version_valid(version,edition):
 			#really this shouldn't ever trigger. I have an equivalent check when setting edition
 			return False
 	return False
-
+#helper
 def get_canonical_link(soup):#returns the link after a redirect on minecraftwiki
 	canonical = soup.find('link', {'rel': 'canonical'})
 	return canonical['href']
