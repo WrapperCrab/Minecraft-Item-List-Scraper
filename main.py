@@ -6,7 +6,7 @@ def main():
 	blocksLink = "https://minecraft.wiki/w/Block"
 	itemsLink = "https://minecraft.wiki/w/Item"
 	# create_blocks_csv(blocksLink, numAnalyze=10, numSkip=939)
-	create_items_csv(itemsLink, numAnalyze=30)
+	create_items_csv(itemsLink)
 
 blockValueDict = {#attribute title: index in blockInfo
 	"Name": 0,
@@ -43,12 +43,13 @@ itemValueDict = {#attribute title: index in blockInfo
 	"Version added": 5,
 	"Version removed": 6,
 	#!!!Need to test to make sure these strings are right
-	"Rarity tier": 9,
-	"Renewable": 10,
-	"Stackable": 11,
-	"Durability": 12,
-	"Restores": 13,
-	"Status effects": 14,
+	"Rarity tier": 7,
+	"Renewable": 8,
+	"Stackable": 9,
+	"Durability": 10,
+	"Armor": 11,
+	"Restores": 12,
+	"Status effects": 13,
 }
 toolDict = {#link extension: tool name
 	"/w/Pickaxe": "Pickaxe",
@@ -92,11 +93,11 @@ def create_items_csv(link, numAnalyze=0, numSkip=0):
 		indirectUseItemsDiv = soup.find(id="Items_with_indirect_use_in_the_world").parent.find_next_sibling('div')
 		spawnEggsItemsDiv = soup.find(id="Spawn_eggs").parent.find_next_sibling('div')
 		# educationItemsDiv = soup.find(id="Exclusive_to_Minecraft_Education").parent.find_next_sibling('div')
-		# unimplementedItemsDiv = soup.find(id="Unimplemented_items").parent.find_next_sibling('div')
-		removedItemsDiv = soup.find(id="Removed_items").parent.find_next_sibling('div')
+		# unimplementedItemsDiv = soup.find(id="Unimplemented_items").parent.find_next_sibling('ul')
+		removedItemsDiv = soup.find(id="Removed_items").parent.find_next_sibling('ul')#not implemented as a div
 		# jokeItemsDiv = soup.find(id="Joke_items").parent.find_next_sibling('div')
 		#add the items from these areas
-		divsToAnalyze = [createEntitiesItemsDiv, indirectUseItemsDiv, spawnEggsItemsDiv, removedItemsDiv]
+		divsToAnalyze = [createEntitiesItemsDiv, useableItemsDiv, indirectUseItemsDiv, spawnEggsItemsDiv, removedItemsDiv]
 		add_items_from_divs(divsToAnalyze, writer, numAnalyze, numSkip)
 
 	print("items.csv successfully created!")
@@ -113,7 +114,7 @@ def add_items_from_div(div, writer, numAnalyze=0, numSkip=0, findVersionRemoved=
 	#returns remaining number to analyze and skip as [numAnalyze, numSkip]
 	leftAnalyze = numAnalyze
 	leftSkip = numSkip
-	items = div.ul.find_all("li")  # entries
+	items = div.find_all("li")  # entries
 	for index in range(len(items)):
 		# handle skip and exit conditions
 		if leftSkip:#check if there were ever any to skip
@@ -123,15 +124,20 @@ def add_items_from_div(div, writer, numAnalyze=0, numSkip=0, findVersionRemoved=
 			if leftAnalyze==0:
 				return [0, 0]
 		item = items[index]
+
+		#superscript checking is flawed since many items have multiple, and several items have them to indicate specific features
+		#of the item in only one version. Also also, some have multiple superscript links. Just do this manually for now.
 		#check that this is not a BE only item
-		if len(item.find_all('sup'))!=0:
-			#there is a superscript, check if it is BE
-			superText = item.sup.i.span.a.text
-			if superText=="BE":
-				print("Item was skipped because it is a Bedrock Edition Exclusive")
-				continue
+		# if len(item.find_all('sup'))!=0:
+		# 	#there is a superscript, check if it is BE
+		# 	superTextLink = item.sup.i.span.a['href']
+		# 	if superTextLink=="https://minecraft.wiki/w/Bedrock_Edition":
+		# 		print("Item was skipped because it is a Bedrock Edition Exclusive")
+		# 		continue
+
 		#find data for this item
-		imageUrl = item.find_all("a")[0]['href']
+		# imageUrl = item.find_all("a")[0]['href']
+		imageUrl = item.img['src']
 		itemLinkTag = item.find_all("a")[1]  # returns the a tag that contains the link to its page
 		pageUrl = itemLinkTag['href']
 		itemName = itemLinkTag.contents[0].text
@@ -173,8 +179,8 @@ def get_item_info(link, parameterShift=3, findVersionRemoved=False):
 	#return the needed data as a list
 	return itemInfo
 def get_item_info_box_info(infoBox, parameterShift=7):#!!!Fill in parameter shift default
-	# returns [rarity_tier, renewable, stackable, durability, restores, status_effects]
-	info = ["?", "?", "?", "?", "?", "?"]
+	# returns [rarity_tier, renewable, stackable, durability, armor, restores, status_effects]
+	info = ["?", "?", "?", "?", "?", "?", "?"]
 	infoBoxValueAreas = infoBox.find_all('tr')
 	for valueArea in infoBoxValueAreas:
 		valueAreaInfo = get_info_box_value_area_info(valueArea)
@@ -304,9 +310,13 @@ def get_block_info_box_info(infoBox, parameterShift=9):
 	return info
 #funcs called on item or block page
 def get_redirect_info(soup, link):
+	#link and newLink are of form "https://www.minecraft.wiki/xxxx#xxxxx"
 	newLink = get_canonical_link(soup)
 	isRedirect = False
-	if newLink!=link:
+	#remove the
+	linkBase = link.split('#')[0]
+	newLinkBase = newLink.split('#')[0]
+	if linkBase!=newLinkBase:
 		isRedirect = True
 	return [isRedirect, newLink]
 def get_info_box_value_area_info(valueArea):
@@ -314,8 +324,7 @@ def get_info_box_value_area_info(valueArea):
 	#valueArea is a <tr> tag inside of the info box
 	title = valueArea.th.text.replace('\n', '') #.text ignores <a> tags
 	try:
-		value = valueArea.p.text.replace('\n', '').encode('ascii', 'ignore').decode(
-			'ascii')  # removes invalid ascii characters
+		value = valueArea.td.text.replace('\n', '').encode('ascii', 'ignore').decode('ascii') #removes invalid ascii characters
 	except AttributeError:
 		value = ""
 		print("Info box area could not be parsed for: ", title)
