@@ -5,8 +5,10 @@ import requests
 def main():
 	blocksLink = "https://minecraft.wiki/w/Block"
 	itemsLink = "https://minecraft.wiki/w/Item"
+	firstVersionLink = "https://minecraft.wiki/w/Cave_game_tech_test"
 	# create_blocks_csv(blocksLink, numAnalyze=10, numSkip=939)
-	create_items_csv(itemsLink)
+	# create_items_csv(itemsLink)
+	create_version_history_csv(firstVersionLink)
 
 blockValueDict = {#attribute title: index in blockInfo
 	"Name": 0,
@@ -99,7 +101,6 @@ def create_items_csv(link, numAnalyze=0, numSkip=0):
 		#add the items from these areas
 		divsToAnalyze = [createEntitiesItemsDiv, useableItemsDiv, indirectUseItemsDiv, spawnEggsItemsDiv, removedItemsDiv]
 		add_items_from_divs(divsToAnalyze, writer, numAnalyze, numSkip)
-
 	print("items.csv successfully created!")
 def add_items_from_divs(divs, writer, numAnalyze=0, numSkip=0):
 	leftSkip = numSkip
@@ -440,6 +441,53 @@ def is_version_valid(version,edition):
 def get_canonical_link(soup):#returns the link after a redirect on minecraftwiki
 	canonical = soup.find('link', {'rel': 'canonical'})
 	return canonical['href']
+
+#create versions csv funcs
+def create_version_history_csv(firstVersionLink, numAnalyze=0):
+	#cycles through the java version pages and records each version name in order in a csv
+	#create the output csv
+	with open("versions.csv", 'w', newline='') as file:
+		writer = csv.writer(file)
+		#generate header line of csv
+		field = ["version name", "version Index"]
+		writer.writerow(field)
+		link = firstVersionLink
+		keepgoing=True
+		linkIndex = 0
+		while keepgoing:
+			req = requests.get(link)
+			contents = req.text
+			soup = BeautifulSoup(contents, 'html.parser')
+			# print(soup.prettify())
+			versionName = get_version_name(soup)
+			print(linkIndex, " ", versionName)#debug
+			writer.writerow([versionName, linkIndex])
+			nextLink = get_next_version_link(soup)
+			if nextLink==False:
+				keepgoing = False
+			link = nextLink
+
+			linkIndex+=1
+			if numAnalyze and (linkIndex>numAnalyze):
+				keepgoing = False
+	print("versions.csv successfully created!")
+def get_version_name(soup):
+	return soup.find(id="firstHeading").text
+def get_next_version_link(soup):
+	wikiPrefix = "https://minecraft.wiki"
+	versionLinkTags = soup.find(class_="infobox-footer").find_all('a')
+	bestFoundLink = ""
+	for tag in versionLinkTags:
+		tagText = tag.text
+		if ("►" in tagText) and not ("►►" in tagText):
+			return wikiPrefix + tag['href']
+		elif "►►" in tagText:
+			bestFoundLink = wikiPrefix + tag['href']
+	if bestFoundLink:
+		#this clause is here for the pages that have only ►► links with no single arrow
+		return bestFoundLink
+	print("no next link found")
+	return False
 
 if __name__=="__main__":
 	main()

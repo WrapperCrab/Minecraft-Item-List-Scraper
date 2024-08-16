@@ -147,6 +147,12 @@ function create_minecraft_list_html($names){
         text-align: center;
     }
     </style>
+    <label for="minecraft-version">Version:</label>
+    <select name="minecraft-version" id="minecraft-version">
+        <option value=""></option>
+
+    </select>
+
     <p>Show:
         <input type="checkbox" id="itemType1" name="itemType1" value="Blocks" checked>
         <label for="itemType1">Blocks</label>
