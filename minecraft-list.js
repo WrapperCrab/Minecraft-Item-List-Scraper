@@ -6,10 +6,9 @@ jQuery(document).ready(function($){
 
 function update_list(){
     //get data from input elements
-    var showBlocks = document.getElementById('itemType1').checked;
-    var showItems = document.getElementById('itemType2').checked;
-    console.log("showBlocks:");
-    console.log(showBlocks);
+    var versionValue = jQuery('#minecraft-version').find(":selected").val();
+    var showBlocks = jQuery('#itemType1').is(":checked");
+    var showItems = jQuery('#itemType2').is(":checked");
     //dump the old List and create the new list
     jQuery.ajax({
         type:"POST",
@@ -17,7 +16,8 @@ function update_list(){
         data:{
             action: 'generate_minecraft_list_table_html',
             'includeBlocks':showBlocks,
-            'includeItems':showItems
+            'includeItems':showItems,
+            'versionValue':versionValue,
         },
         success:function(response){
             jQuery("#minecraft-list").html(response);
