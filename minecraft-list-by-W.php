@@ -88,7 +88,7 @@ function create_blocks_table(){
             $table_name,
             array(
                 'name' => $blockData[0],
-                'versionAddedID' => $versionAddedID,//!!!If this is null is it set as null in the database?
+                'versionAddedID' => $versionAddedID,
                 'versionRemovedID' => $versionRemovedID,
                 )
         );
@@ -155,7 +155,7 @@ function get_version_id($versionName){
     //find the version id
     global $wpdb;
     $versionTableName = $wpdb->prefix . "MinecraftVersions";
-    $sql = "SELECT id FROM {$versionTableName} WHERE {$versionTableName}.name='{$trueVersionName}'";//!!!Does this work?
+    $sql = "SELECT id FROM {$versionTableName} WHERE {$versionTableName}.name='{$trueVersionName}'";
     $result = $wpdb->get_row($sql);
 
     if (!is_null($result)){
@@ -163,12 +163,11 @@ function get_version_id($versionName){
     }
     return null;
 }
-function get_item_names($includeBlocks=true,$includeItems=true,$versionValue=-1){//!!!Work in progress
+function get_item_names($versionFilterType="all_items",$versionValue=999,$includeBlocks=true,$includeItems=true,$sortingValues=[]){//!!!Work in progress
     global $wpdb;
     $blockTableName = $wpdb->prefix . "MinecraftBlocks";
     $itemTableName = $wpdb->prefix . "MinecraftItems";
     $versionTableName = $wpdb->prefix . "MinecraftVersions";
-
     //alias definitions
     $sql = "WITH ";
     $neededItemsQuery = get_needed_items_query($includeBlocks,$includeItems,$blockTableName,$itemTableName);//creates table with alias neededItems
@@ -176,17 +175,67 @@ function get_item_names($includeBlocks=true,$includeItems=true,$versionValue=-1)
         return [];
     }
     $sql .= $neededItemsQuery;
-    if ($versionValue!==-1){
-        $sql .= ", " . get_added_items_query($versionValue,$versionTableName);
-        $sql .=", " . get_not_removed_items_query($versionValue,$versionTableName);
-        //actually query part
-        $sql .= " SELECT name FROM (addedItems NATURAL JOIN notRemovedItems) ";
-    }else{
-        $sql .= " SELECT name FROM neededItems ";
+    switch ($versionFilterType){
+        case "all_items":
+            $sql .= " SELECT name FROM neededItems ";
+            break;
+        case "exists_in_version":
+            $sql .= ", " . get_added_items_query($versionValue,$versionTableName);
+            $sql .= ", " . get_not_removed_items_query($versionValue,$versionTableName);
+            $sql .= " SELECT name FROM (addedItems NATURAL JOIN notRemovedItems) ";
+            break;
+        case "added_in_version":
+            $sql .= ", " . get_newly_added_items_query($versionValue, $versionTableName);
+            $sql .= " SELECT name FROM addedItems ";
+            break;
+        case "removed_in_version":
+            $sql .= ", " . get_newly_removed_items_query($versionValue, $versionTableName);
+            $sql .= " SELECT name FROM removedItems ";
+            break;
+        default:
+            //This should never happen
+            return ["Unkown version filterType of " . $versionFilterType];
     }
-    $sql .= "ORDER BY name";
-    $sql .= ";";
+    //!!!order choices
+    $ordering = "";
+    for ($i=0; $i<count($sortingValues); $i++){
+        $values = $sortingValues[$i];
+        //add the comma for multiple orders
+        if ($i===0){
+            $ordering .= "ORDER BY ";
+        }else{
+            $ordering .= ", ";
+        }
+        //add the column name
+        switch ($values[0]){
+            case "alphabetical":
+                $ordering .= "name";
+                break;
+            case "name_length":
+                $ordering .= "CHAR_LENGTH(name)";//!!!This is having some very strange behavior.
+                break;
+            case "age":
+                //!!!Do a union with neededItems then a join with versions table to sort by value
+                //!!!This feels like it could alter the fundamental structure of the entire query...
+                $ordering .= "name";//!!!so the code doesn't crash while I fix this
+                break;
+            default:
+                return ["Unknown sorting type of " . $values[0]];
+        }
+        //add the order direction
+        if ($values[2]==="ascending"){
+            $ordering .= " ASC";
+        }else if ($values[2]==="descending"){
+            $ordering .= " DESC";
+        }else{
+            return ["Unkown sorting direction of " . $values[2]];
+        }
+    }
+    if ($ordering!==""){
+        $sql .= $ordering;
+    }
 
+    $sql .= ";";
     $result = $wpdb->get_results($sql);
     $names=[];
     foreach ($result as $item){
@@ -196,7 +245,7 @@ function get_item_names($includeBlocks=true,$includeItems=true,$versionValue=-1)
     return $names;
 }
 
-function get_needed_items_query($includeBlocks,$includeItems, $blockTableName, $itemTableName){
+function get_needed_items_query($includeBlocks, $includeItems, $blockTableName, $itemTableName){
     $sql = " neededItems AS";
     if ($includeItems===true && $includeBlocks===true){
         $neededItems = " (SELECT * FROM {$blockTableName} UNION SELECT * FROM {$itemTableName})";
@@ -210,25 +259,42 @@ function get_needed_items_query($includeBlocks,$includeItems, $blockTableName, $
     $sql .= $neededItems;
     return $sql;
 }
-function get_added_items_query($versionValue, $versionTableName){//!!!does not consider $version==-1
+function get_added_items_query($versionValue, $versionTableName){
     //get table of neededItems names added before or at $version
     $sql = "addedItems AS
         (SELECT neededItems.name FROM neededItems
         LEFT JOIN {$versionTableName}
         ON neededItems.versionAddedID={$versionTableName}.id
-        WHERE ({$versionTableName}.value<=$versionValue) OR (neededItems.versionAddedID IS NULL))";
+        WHERE ({$versionTableName}.value<={$versionValue}) OR (neededItems.versionAddedID IS NULL))";
     return $sql;
 }
-function get_not_removed_items_query($versionValue, $versionTableName){//!!!does not consider $version==-1
+function get_newly_added_items_query($versionValue, $versionTableName){
+    //get table of neededItems names added at $version
+    $sql = "addedItems AS
+        (SELECT neededItems.name FROM neededItems
+        LEFT JOIN {$versionTableName}
+        ON neededItems.versionAddedID={$versionTableName}.id
+        WHERE ({$versionTableName}.value IS NOT NULL) AND ({$versionTableName}.value={$versionValue}))";
+    return $sql;
+}
+function get_newly_removed_items_query($versionValue, $versionTableName){
+    //get table of neededItems names removed in $version
+    $sql = "removedItems AS
+        (SELECT neededItems.name FROM neededItems
+        LEFT JOIN {$versionTableName}
+        ON neededItems.versionRemovedID={$versionTableName}.id
+        WHERE ({$versionTableName}.value IS NOT NULL) AND ({$versionTableName}.value={$versionValue}))";
+    return $sql;
+}
+function get_not_removed_items_query($versionValue, $versionTableName){
     //get table of neededItems names removed after $version
     $sql = "notRemovedItems AS
         (SELECT neededItems.name FROM neededItems
         LEFT JOIN {$versionTableName}
         ON neededItems.versionRemovedID={$versionTableName}.id
-        WHERE ({$versionTableName}.value>$versionValue) OR (neededItems.versionRemovedID IS NULL))";
+        WHERE ({$versionTableName}.value>{$versionValue}) OR (neededItems.versionRemovedID IS NULL))";
     return $sql;
 }
-
 
 function get_versions($ascending){
     global $wpdb;
@@ -265,6 +331,9 @@ function create_minecraft_list_html($names, $versions){
         font-size: 1.17em;
         text-align: center;
     }
+    h1, h2, h3 {
+        text-align: center;
+    }
     p {
         font-size: 1.17em;
         text-align: center;
@@ -273,37 +342,109 @@ function create_minecraft_list_html($names, $versions){
         /* display: block; */
         margin: 0 auto;
     }
+    fieldset {
+        text-align: center;
+    }
+    .radio-label .checkbox-label {
+        text-align: center;
+        vertical-align: top;
+        /* margin-right: 3%; */
+    }
+    .radio-input .checkbox-input {
+        text-align: center;
+        vertical-align: top;
+    }
+
     </style>
-    <p>Version:
-        <select name="minecraft-version" id="minecraft-version">
-            <?php
-            foreach ($versions as $version){?>
-                <option value=<?php echo $version->value?>><?php echo $version->name?></option>
-            <?php
-            }
-            ?>
+
+    <!-- <h1>Minecraft Item List</h1> -->
+    <h3>Options</h3>
+    <!-- <h3>Version Filter Options:</h3> -->
+    <fieldset>
+        <legend>Version Filter Options</legend>
+        <input type="radio" class="radio-input" id="all_items" value="all_items" name="version_filter" checked>
+            <label for="all_items" class="radio-label">All Items</label>
+        <input type="radio" class="radio-input" id="exists_in_version" value="exists_in_version" name="version_filter">
+            <label for="exists_in_version" class="radio-label">Exists in Version</label>
+        <input type="radio" class="radio-input" id="added_in_version" value="added_in_version" name="version_filter">
+            <label for="added_in_version" class="radio-label">Added in Version</label>
+        <input type="radio" class="radio-input" id="removed_in_version" value="removed_in_version" name="version_filter">
+            <label for="removed_in_version" class="radio-label">Removed in Version</label>
+        <br>
+
+        <p>Version:
+            <select name="minecraft_version" id="minecraft_version">
+                <?php
+                foreach ($versions as $version){?>
+                    <option value=<?php echo $version->value?>><?php echo $version->name?></option>
+                <?php
+                }
+                ?>
+            </select>
+        </p>
+    </fieldset>
+    <fieldset>
+        <legend>Item Type Filter Options</legend>
+        <input type="checkbox" class="checkbox-input" id="item_type_1" name="itemType1" value="Blocks" checked>
+            <label for="itemType1" class="checkbox-label">Blocks</label>
+        <input type="checkbox" class="checkbox-input" id="item_type_2" name="itemType2" value="Items" checked>
+            <label for="itemType2" class="checkbox-label">Items</label>
+    </fieldset>
+    <fieldset>
+        <legend>Sorting Options</legend>
+        <input type="checkbox" class="checkbox-input" id="alphabetical_sort" value="alphabetical_sort" checked>
+        <label for="alphabetical_sort" class="checkbox-label">Alphabetical</label>
+        <input type="radio" class="radio-input" id="alphabetical_sort_ascending" name="alphabetical_sort_direction" value="ascending" checked>
+        <label for="alphabetical_sort_ascending" class="radio-label">Ascending</label>
+        <input type="radio" class="radio-input" id="alphabetical_sort_descending" name="alphabetical_sort_direction" value="descending">
+        <label for="alphabetical_sort_descending" class="radio-label">Descending</label>
+        <select name="priority" id="alphabetical_sort_priority">
+            <option>1</option>
+            <option>2</option>
+            <option>3</option>
         </select>
-    </p>
+        <br>
 
-    <p>Show:
-        <input type="checkbox" id="itemType1" name="itemType1" value="Blocks" checked>
-        <label for="itemType1">Blocks</label>
-        <input type="checkbox" id="itemType2" name="itemType2" value="Items" checked>
-        <label for="itemType2">Items</label>
-    </p>
+        <input type="checkbox" class="checkbox-input" id="name_length_sort" value="name_length_sort">
+        <label for="name_length_sort" class="checkbox-label">Name Length</label>
+        <input type="radio" class="radio-input" id="name_length_sort_ascending" name="name_length_sort_direction" value="ascending" checked>
+        <label for="name_length_sort_ascending" class="radio-label">Ascending</label>
+        <input type="radio" class="radio-input" id="name_length_sort_descending" name="name_length_sort_direction" value="descending">
+        <label for="name_length_sort_descending" class="radio-label">Descending</label>
+        <select name="priority" id="name_length_sort_priority">
+            <option>1</option>
+            <option>2</option>
+            <option>3</option>
+        </select>
+        <br>
 
-    <button id="list-selection-submit" style="margin:0 auto;display:block" font-size=1.5em>Update List</button>
+        <input type="checkbox" class="checkbox-input" id="age_sort" value="age_sort">
+        <label for="age_sort" class="checkbox-label">Age</label>
+        <input type="radio" class="radio-input" id="age_sort_ascending" name="age_sort_direction" value="ascending" checked>
+        <label for="age_sort_ascending" class="radio-label">Ascending</label>
+        <input type="radio" class="radio-input" id="age_sort_descending" name="age_sort_direction" value="descending">
+        <label for="age_sort_descending" class="radio-label">Descending</label>
+        <select name="priority" id="age_sort_priority">
+            <option>1</option>
+            <option>2</option>
+            <option>3</option>
+        </select>
+    </fieldset>
 
-    <table id="minecraft-list" style="width:70vw;">
+    <button id="list_selection_submit" style="margin:0 auto;display:block" font-size=1.5em>Update List</button>
+
+    <h2>List</h2>
+    <table id="minecraft_list" style="width:70vw;">
         <?php echo get_minecraft_list_table_html($names)?>
     </table>
     <?php
 }
 function get_minecraft_list_table_html($names){
-    $tableHtml = '
-    <tr>
-        <th>List</th>
-    </tr>';
+    // $tableHtml = '
+    // <tr>
+    //     <th>List</th>
+    // </tr>';
+    $tableHtml = "";
     foreach ($names as $name){
         $tableHtml = $tableHtml . '
     <tr>
@@ -314,12 +455,38 @@ function get_minecraft_list_table_html($names){
 }
 //ajax funcs
 function generate_minecraft_list_table_html_ajax(){
-    $includeBlocks = string_to_bool($_POST['includeBlocks']);//I think this is returning false when should be true
+    $includeBlocks = string_to_bool($_POST['includeBlocks']);
     $includeItems = string_to_bool($_POST['includeItems']);
-    $versionValue = $_POST['versionValue'];
-    $names = get_item_names($includeBlocks,$includeItems,$versionValue);
+    $versionValue = (int)$_POST['versionValue'];
+    $versionFilterType= $_POST['versionFilterType'];
+
+    $alphabeticalSortValues = ['alphabetical',string_to_bool($_POST['sortAlphabetical']),$_POST['alphabeticalDirection'],(int)$_POST['alphabeticalPriority']];
+    $nameLengthSortValues = ['name_length',string_to_bool($_POST['sortNameLength']),$_POST['nameLengthDirection'],(int)$_POST['nameLengthPriority']];
+    $ageSortValues = ['age',string_to_bool($_POST['ageLength']),$_POST['ageDirection'],(int)$_POST['agePriority']];
+    $sortingValues = get_sorting_values([$alphabeticalSortValues,$nameLenghtSortValues,$ageSortValues]);
+
+    $names = get_item_names($versionFilterType,$versionValue,$includeBlocks,$includeItems,$sortingValues);
     echo get_minecraft_list_table_html($names);
     wp_die();
+}
+function get_sorting_values($sortData){
+    //$sortData like: [[$thisSortName, $useThisSortBool, $thisSortDirection, $thisSortPriority],...]
+    //converts $sortData into an array with only the selected sorts in order of priority
+    //remove unselected sort types
+    $filteredSortData = [];
+    foreach ($sortData as $sortingOptions){
+        if ($sortingOptions[1]){
+            $filteredSortData[] = $sortingOptions;
+        }
+    }
+    //Order the sort types by priority
+    $priorities = [];
+    foreach ($filteredSortData as $sortingOptions){
+        $priorities[] = $sortingOptions[3];
+    }
+    array_multisort($priorities, SORT_ASC, $filteredSortData);//!!!This should alter $filteredSortData. Does it?
+
+    return $filteredSortData;
 }
 //helper funcs
 function string_to_bool($string){
