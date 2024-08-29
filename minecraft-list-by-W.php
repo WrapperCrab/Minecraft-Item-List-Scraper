@@ -163,7 +163,7 @@ function get_version_id($versionName){
     }
     return null;
 }
-function get_item_names($versionFilterType="all_items",$versionValue=999,$includeBlocks=true,$includeItems=true,$sortingValues=[]){//!!!Work in progress
+function get_item_names($versionFilterType="all_items",$versionValue=999,$includeBlocks=true,$includeItems=true,$sortingValues=[],$includeSQL=false,$debugValues=[]){//!!!Work in progress
     global $wpdb;
     $blockTableName = $wpdb->prefix . "MinecraftBlocks";
     $itemTableName = $wpdb->prefix . "MinecraftItems";
@@ -196,7 +196,7 @@ function get_item_names($versionFilterType="all_items",$versionValue=999,$includ
             //This should never happen
             return ["Unkown version filterType of " . $versionFilterType];
     }
-    //!!!order choices
+    //order choices
     $ordering = "";
     for ($i=0; $i<count($sortingValues); $i++){
         $values = $sortingValues[$i];
@@ -212,12 +212,10 @@ function get_item_names($versionFilterType="all_items",$versionValue=999,$includ
                 $ordering .= "name";
                 break;
             case "name_length":
-                $ordering .= "CHAR_LENGTH(name)";//!!!This is having some very strange behavior.
+                $ordering .= "CHAR_LENGTH(name)";
                 break;
             case "age":
-                //!!!Do a union with neededItems then a join with versions table to sort by value
-                //!!!This feels like it could alter the fundamental structure of the entire query...
-                $ordering .= "name";//!!!so the code doesn't crash while I fix this
+                $ordering .= "versionAddedID";
                 break;
             default:
                 return ["Unknown sorting type of " . $values[0]];
@@ -242,17 +240,25 @@ function get_item_names($versionFilterType="all_items",$versionValue=999,$includ
         $names[] = $item->name;
         // $versionsAdded[] = $item->versionAdded;
     }
+
+    if ($includeSQL){
+        $names[] = $sql;
+    }
+    foreach ($debugValues as $value){
+        $names[] = $value;
+    }
     return $names;
 }
 
 function get_needed_items_query($includeBlocks, $includeItems, $blockTableName, $itemTableName){
     $sql = " neededItems AS";
     if ($includeItems===true && $includeBlocks===true){
-        $neededItems = " (SELECT * FROM {$blockTableName} UNION SELECT * FROM {$itemTableName})";
+        $neededItems = " (SELECT name, versionAddedID, versionRemovedID FROM {$blockTableName} UNION
+        SELECT name, versionAddedID, versionRemovedID FROM {$itemTableName})";
     }elseif ($includeItems===true) {
-        $neededItems = " (SELECT * FROM {$itemTableName})";
+        $neededItems = " (SELECT name, versionAddedID, versionRemovedID FROM {$itemTableName})";
     }elseif ($includeBlocks===true) {
-        $neededItems = " (SELECT * FROM {$blockTableName})";
+        $neededItems = " (SELECT name, versionAddedID, versionRemovedID FROM {$blockTableName})";
     }else{
         return null;
     }
@@ -262,7 +268,7 @@ function get_needed_items_query($includeBlocks, $includeItems, $blockTableName, 
 function get_added_items_query($versionValue, $versionTableName){
     //get table of neededItems names added before or at $version
     $sql = "addedItems AS
-        (SELECT neededItems.name FROM neededItems
+        (SELECT neededItems.name, neededItems.versionAddedID FROM neededItems
         LEFT JOIN {$versionTableName}
         ON neededItems.versionAddedID={$versionTableName}.id
         WHERE ({$versionTableName}.value<={$versionValue}) OR (neededItems.versionAddedID IS NULL))";
@@ -271,7 +277,7 @@ function get_added_items_query($versionValue, $versionTableName){
 function get_newly_added_items_query($versionValue, $versionTableName){
     //get table of neededItems names added at $version
     $sql = "addedItems AS
-        (SELECT neededItems.name FROM neededItems
+        (SELECT neededItems.name, neededItems.versionAddedID FROM neededItems
         LEFT JOIN {$versionTableName}
         ON neededItems.versionAddedID={$versionTableName}.id
         WHERE ({$versionTableName}.value IS NOT NULL) AND ({$versionTableName}.value={$versionValue}))";
@@ -280,7 +286,7 @@ function get_newly_added_items_query($versionValue, $versionTableName){
 function get_newly_removed_items_query($versionValue, $versionTableName){
     //get table of neededItems names removed in $version
     $sql = "removedItems AS
-        (SELECT neededItems.name FROM neededItems
+        (SELECT neededItems.name, neededItems.versionAddedID FROM neededItems
         LEFT JOIN {$versionTableName}
         ON neededItems.versionRemovedID={$versionTableName}.id
         WHERE ({$versionTableName}.value IS NOT NULL) AND ({$versionTableName}.value={$versionValue}))";
@@ -289,7 +295,7 @@ function get_newly_removed_items_query($versionValue, $versionTableName){
 function get_not_removed_items_query($versionValue, $versionTableName){
     //get table of neededItems names removed after $version
     $sql = "notRemovedItems AS
-        (SELECT neededItems.name FROM neededItems
+        (SELECT neededItems.name, neededItems.versionAddedID FROM neededItems
         LEFT JOIN {$versionTableName}
         ON neededItems.versionRemovedID={$versionTableName}.id
         WHERE ({$versionTableName}.value>{$versionValue}) OR (neededItems.versionRemovedID IS NULL))";
@@ -462,29 +468,31 @@ function generate_minecraft_list_table_html_ajax(){
 
     $alphabeticalSortValues = ['alphabetical',string_to_bool($_POST['sortAlphabetical']),$_POST['alphabeticalDirection'],(int)$_POST['alphabeticalPriority']];
     $nameLengthSortValues = ['name_length',string_to_bool($_POST['sortNameLength']),$_POST['nameLengthDirection'],(int)$_POST['nameLengthPriority']];
-    $ageSortValues = ['age',string_to_bool($_POST['ageLength']),$_POST['ageDirection'],(int)$_POST['agePriority']];
-    $sortingValues = get_sorting_values([$alphabeticalSortValues,$nameLenghtSortValues,$ageSortValues]);
+    $ageSortValues = ['age',string_to_bool($_POST['sortAge']),$_POST['ageDirection'],(int)$_POST['agePriority']];
+    $sortingValues = get_filtered_sorting_values([$alphabeticalSortValues,$nameLengthSortValues,$ageSortValues]);
 
-    $names = get_item_names($versionFilterType,$versionValue,$includeBlocks,$includeItems,$sortingValues);
+    $names = get_item_names($versionFilterType,$versionValue,$includeBlocks,$includeItems,$sortingValues,true);
     echo get_minecraft_list_table_html($names);
     wp_die();
 }
-function get_sorting_values($sortData){
+function get_filtered_sorting_values($sortData){
     //$sortData like: [[$thisSortName, $useThisSortBool, $thisSortDirection, $thisSortPriority],...]
-    //converts $sortData into an array with only the selected sorts in order of priority
+    //converts $sortData into an array with only the selected sorts (useThisSortBool is true) in order of increasing priority
+
     //remove unselected sort types
     $filteredSortData = [];
-    foreach ($sortData as $sortingOptions){
-        if ($sortingOptions[1]){
-            $filteredSortData[] = $sortingOptions;
+    foreach ($sortData as $sortTypeData){
+        if ($sortTypeData[1]===true){
+            $filteredSortData[] = $sortTypeData;
         }
     }
+
     //Order the sort types by priority
     $priorities = [];
     foreach ($filteredSortData as $sortingOptions){
         $priorities[] = $sortingOptions[3];
     }
-    array_multisort($priorities, SORT_ASC, $filteredSortData);//!!!This should alter $filteredSortData. Does it?
+    array_multisort($priorities, SORT_ASC, $filteredSortData);
 
     return $filteredSortData;
 }

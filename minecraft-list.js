@@ -41,15 +41,15 @@ function update_list(){
             'versionFilterType':versionFilterType,
 
             'sortAlphabetical':sortAlphabetical,
-            'alphabeticalDirection':alphabeticalDirection,//!!should really be a bool
+            'alphabeticalDirection':alphabeticalDirection,
             'alphabeticalPriority':alphabeticalPriority,
 
             'sortNameLength':sortNameLength,
-            'nameLengthDirection':nameLengthDirection,//!!should really be a bool
+            'nameLengthDirection':nameLengthDirection,
             'nameLengthPriority':nameLengthPriority,
 
             'sortAge':sortAge,
-            'ageDirection':ageDirection,//!!should really be a bool
+            'ageDirection':ageDirection,
             'agePriority':agePriority,
         },
         success:function(response){
