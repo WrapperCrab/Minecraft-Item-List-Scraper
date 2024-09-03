@@ -19,6 +19,11 @@ function minecraft_list_js_init(){
 //add_action(wp_ajax_(func called in ajax), func to call here);
 add_action('wp_ajax_generate_minecraft_list_table_html','generate_minecraft_list_table_html_ajax');
 add_action('wp_ajax_nopriv_generate_minecraft_list_table_html','generate_minecraft_list_table_html_ajax');
+add_action('wp_ajax_get_names','get_names_ajax');
+add_action('wp_ajax_nopriv_get_names','get_names_ajax');
+
+add_option('list',[]);//stores the current list of minecraft items as an array of strings
+
 //database write funcs
 function create_tables(){
     create_versions_table();//Must be first
@@ -163,6 +168,7 @@ function get_version_id($versionName){
     }
     return null;
 }
+
 function get_item_names($versionFilterType="all_items",$versionValue=999,$includeBlocks=true,$includeItems=true,$sortingValues=[],$includeSQL=false,$debugValues=[]){//!!!Work in progress
     global $wpdb;
     $blockTableName = $wpdb->prefix . "MinecraftBlocks";
@@ -324,11 +330,12 @@ function get_versions($ascending){
 function show_minecraft_list(){
     ob_start();
     $names = get_item_names();
+    update_option('list',$names);
     $versions = get_versions(false);
     create_minecraft_list_html($names,$versions);
     return ob_get_clean();
 }
-function create_minecraft_list_html($names, $versions){
+function create_minecraft_list_html($names, $versions, $numColumns=1){
     //!!!Style should really be in <head>
     ?>
     <style>
@@ -361,6 +368,10 @@ function create_minecraft_list_html($names, $versions){
         vertical-align: top;
     }
 
+    *:disabled{
+        opacity: 0.2;
+    }
+
     </style>
 
     <!-- <h1>Minecraft Item List</h1> -->
@@ -369,13 +380,13 @@ function create_minecraft_list_html($names, $versions){
     <fieldset>
         <legend>Version Filter Options</legend>
         <input type="radio" class="radio-input" id="all_items" value="all_items" name="version_filter" checked>
-            <label for="all_items" class="radio-label">All Items</label>
+        <label for="all_items" class="radio-label">All Items</label>
         <input type="radio" class="radio-input" id="exists_in_version" value="exists_in_version" name="version_filter">
-            <label for="exists_in_version" class="radio-label">Exists in Version</label>
+        <label for="exists_in_version" class="radio-label">Exists in Version</label>
         <input type="radio" class="radio-input" id="added_in_version" value="added_in_version" name="version_filter">
-            <label for="added_in_version" class="radio-label">Added in Version</label>
+        <label for="added_in_version" class="radio-label">Added in Version</label>
         <input type="radio" class="radio-input" id="removed_in_version" value="removed_in_version" name="version_filter">
-            <label for="removed_in_version" class="radio-label">Removed in Version</label>
+        <label for="removed_in_version" class="radio-label">Removed in Version</label>
         <br>
 
         <p>Version:
@@ -436,26 +447,40 @@ function create_minecraft_list_html($names, $versions){
             <option>3</option>
         </select>
     </fieldset>
+    <fieldset>
+        <legend>Display Options</legend>
+        <label for="num_columns" class="number-label">Number of Columns: </label>
+        <input type="text" inputmode="numeric" pattern="[0-9]*" class="number-input" id="num_columns" value="1">
+    </fieldset>
 
     <button id="list_selection_submit" style="margin:0 auto;display:block" font-size=1.5em>Update List</button>
 
     <h2>List</h2>
+    <button id="copy_to_clipboard" style="float:right;">📋</button>
     <table id="minecraft_list" style="width:70vw;">
-        <?php echo get_minecraft_list_table_html($names)?>
+        <?php echo get_minecraft_list_table_html($names,$numColumns)?>
     </table>
     <?php
 }
-function get_minecraft_list_table_html($names){
-    // $tableHtml = '
-    // <tr>
-    //     <th>List</th>
-    // </tr>';
+function get_minecraft_list_table_html($names,$numColumns){
     $tableHtml = "";
-    foreach ($names as $name){
-        $tableHtml = $tableHtml . '
-    <tr>
-        <td>' . $name . '</td>
-    </tr>';
+    $keepgoing = true;
+    $nameIndex = 0;
+    $numNames = count($names);
+    $name = $names[$nameIndex];
+    while ($keepgoing){
+        $tableHtml .= '<tr>';
+        for ($i=0;$i<$numColumns;$i++){
+            $tableHtml .= '<td>' . $name . '</td>';
+            //go to next name
+            $nameIndex++;
+            if ($nameIndex>=$numNames){
+                $keepgoing = false;
+                break;//!!!This should just break out of the for and not the while
+            }
+            $name = $names[$nameIndex];
+        }
+        $tableHtml .= '</tr>';
     }
     return $tableHtml;
 }
@@ -471,10 +496,20 @@ function generate_minecraft_list_table_html_ajax(){
     $ageSortValues = ['age',string_to_bool($_POST['sortAge']),$_POST['ageDirection'],(int)$_POST['agePriority']];
     $sortingValues = get_filtered_sorting_values([$alphabeticalSortValues,$nameLengthSortValues,$ageSortValues]);
 
-    $names = get_item_names($versionFilterType,$versionValue,$includeBlocks,$includeItems,$sortingValues,true);
-    echo get_minecraft_list_table_html($names);
+    $numColumns = (int)$_POST['numColumns'];
+
+    $names = get_item_names($versionFilterType,$versionValue,$includeBlocks,$includeItems,$sortingValues,true);//!!!global names should be set here
+    update_option('list',$names);
+    echo get_minecraft_list_table_html($names,$numColumns);
     wp_die();
 }
+function get_names_ajax(){
+    // echo json_encode($names);
+    echo json_encode(get_option('list'));
+    // echo count(get_option('list'));//!!!TEST
+    wp_die();
+}
+
 function get_filtered_sorting_values($sortData){
     //$sortData like: [[$thisSortName, $useThisSortBool, $thisSortDirection, $thisSortPriority],...]
     //converts $sortData into an array with only the selected sorts (useThisSortBool is true) in order of increasing priority
