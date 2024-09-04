@@ -169,7 +169,7 @@ function get_version_id($versionName){
     return null;
 }
 
-function get_item_names($versionFilterType="all_items",$versionValue=999,$includeBlocks=true,$includeItems=true,$sortingValues=[],$includeSQL=false,$debugValues=[]){//!!!Work in progress
+function get_item_names($versionFilterType="all_items",$versionValue=999,$includeBlocks=true,$includeItems=true,$sortingValues=[["alphabetical",true,"ascending",1]],$includeSQL=false,$debugValues=[]){
     global $wpdb;
     $blockTableName = $wpdb->prefix . "MinecraftBlocks";
     $itemTableName = $wpdb->prefix . "MinecraftItems";
@@ -246,7 +246,7 @@ function get_item_names($versionFilterType="all_items",$versionValue=999,$includ
         $names[] = $item->name;
         // $versionsAdded[] = $item->versionAdded;
     }
-
+    //debug stuff
     if ($includeSQL){
         $names[] = $sql;
     }
@@ -319,12 +319,6 @@ function get_versions($ascending){
     }
     $result = $wpdb->get_results($sql);
     return $result;
-
-    // foreach ($result as $version){
-    //     $versionValues[] = $version->value;
-    //     $versionNames[] = $version->name;
-    // }
-    // return [$versionValues,$versionNames];
 }
 //html funcs
 function show_minecraft_list(){
@@ -336,130 +330,247 @@ function show_minecraft_list(){
     return ob_get_clean();
 }
 function create_minecraft_list_html($names, $versions, $numColumns=1){
-    //!!!Style should really be in <head>
     ?>
-    <style>
-    table, th, td {
-        border: 0px;
-        font-size: 1.17em;
-        text-align: center;
-    }
-    h1, h2, h3 {
-        text-align: center;
-    }
-    p {
-        font-size: 1.17em;
-        text-align: center;
-    }
-    select {
-        /* display: block; */
-        margin: 0 auto;
-    }
-    fieldset {
-        text-align: center;
-    }
-    .radio-label .checkbox-label {
-        text-align: center;
-        vertical-align: top;
-        /* margin-right: 3%; */
-    }
-    .radio-input .checkbox-input {
-        text-align: center;
-        vertical-align: top;
-    }
+    <head>
+        <style>
+        .table-container{
+            overflow-x: scroll;
+        }
+        .center-container{
+            /* display:block; */
+            display:flex;
+            align-items: center;
+            justify-content: center;
+            gap: 20px;
+            margin-top:0px;
+            margin-bottom:0px;
+            padding-top:0px;
+            padding-bottom:0px;
+        }
+        .right-container{
+            display:flex;
+            justify-content: flex-end;
+            margin-top:0px;
+            margin-bottom:0px;
+            padding-top:0px;
+            padding-bottom:0px;
+        }
+        table{
+            table-layout: fixed;
+            border-collapse: collapse;
+            /* display: block; */
+        }
+        td {
+            border: 1px solid black;
+            width: 160px;
+            min-width: 160px;
+            font-size: 1vw;
+            text-align: center;
+        }
 
-    *:disabled{
-        opacity: 0.2;
-    }
+        h1, h2, h3 {
+            text-align: center;
+        }
+        p {
+            /* font-size: 1.17em; */
+            text-align: center;
+            /* margin-top: 0.1em;
+            margin-bottom: 0.1em;
+            margin-left: 0;
+            margin-right: 0; */
+            /* margin:0; */
+        }
+        select {
+            /* display: block; */
+            /* margin: 0 auto; */
+            /* padding:0px; */
+        }
+        fieldset {
+            padding-top: 0em;
+            padding-bottom: 0em;
+            margin-top: 0em;
+            margin-bottom: 0em;
+            text-align:center;
+        }
+        fieldset legend{
+            padding-top: 0em;
+            padding-bottom: 0em;
+            margin-top: 0em;
+            margin-bottom: 0em;
+        }
+        fieldset p{
+            padding-top: 0em;
+            padding-bottom: 0em;
+            margin-top: 0em;
+            margin-bottom: 0em;
+        }
+        .radio-label .checkbox-label {
+            text-align: center;
+            vertical-align: top;
+            margin-right: 5em;
+            /* margin-right: 3%; */
+            /* padding:0px; */
+        }
+        .radio-input .checkbox-input {
+            text-align: center;
+            vertical-align: top;
+            margin-left: 5em;
+            /* padding:0px; */
+        }
 
-    </style>
+        *:disabled{
+            opacity: 0.2;
+        }
 
-    <!-- <h1>Minecraft Item List</h1> -->
-    <h3>Options</h3>
-    <!-- <h3>Version Filter Options:</h3> -->
-    <fieldset>
-        <legend>Version Filter Options</legend>
-        <input type="radio" class="radio-input" id="all_items" value="all_items" name="version_filter" checked>
-        <label for="all_items" class="radio-label">All Items</label>
-        <input type="radio" class="radio-input" id="exists_in_version" value="exists_in_version" name="version_filter">
-        <label for="exists_in_version" class="radio-label">Exists in Version</label>
-        <input type="radio" class="radio-input" id="added_in_version" value="added_in_version" name="version_filter">
-        <label for="added_in_version" class="radio-label">Added in Version</label>
-        <input type="radio" class="radio-input" id="removed_in_version" value="removed_in_version" name="version_filter">
-        <label for="removed_in_version" class="radio-label">Removed in Version</label>
+        </style>
+    </head>
+    <body>
+        <h3>Options</h3>
+        <!-- <fieldset>
+            <legend>TEST</legend>
+        </fieldset>
+        <fieldset>
+            <legend>TEST 2</legend>
+            <p>why the hell is it so big?</p>
+        </fieldset>
+        <fieldset>
+            <legend>TEST 3</legend>
+            <p></p>
+        </fieldset> -->
+
+
+        <fieldset>
+            <legend>Version Filter Options</legend>
+            <div class="center-container">
+                <div>
+                    <input type="radio" class="radio-input" id="all_items" value="all_items" name="version_filter" checked>
+                    <label for="all_items" class="radio-label">All Items</label>
+                </div>
+                <div>
+                    <input type="radio" class="radio-input" id="exists_in_version" value="exists_in_version" name="version_filter">
+                    <label for="exists_in_version" class="radio-label">Exists in Version</label>
+                </div>
+                <div>
+                    <input type="radio" class="radio-input" id="added_in_version" value="added_in_version" name="version_filter">
+                    <label for="added_in_version" class="radio-label">Added in Version</label>
+                </div>
+                <div>
+                    <input type="radio" class="radio-input" id="removed_in_version" value="removed_in_version" name="version_filter">
+                    <label for="removed_in_version" class="radio-label">Removed in Version</label>
+                </div>
+            </div>
+            <br>
+            <p>Version:
+                <select name="minecraft_version" id="minecraft_version">
+                    <?php
+                    foreach ($versions as $version){?>
+                        <option value=<?php echo $version->value?>><?php echo $version->name?></option>
+                    <?php
+                    }
+                    ?>
+                </select>
+            </p>
+        </fieldset>
+        <fieldset>
+            <legend>Item Type Filter Options</legend>
+            <div class="center-container">
+                <div>
+                    <input type="checkbox" class="checkbox-input" id="item_type_1" name="itemType1" value="Blocks" checked>
+                    <label for="itemType1" class="checkbox-label">Blocks</label>
+                </div>
+                <div>
+                    <input type="checkbox" class="checkbox-input" id="item_type_2" name="itemType2" value="Items" checked>
+                    <label for="itemType2" class="checkbox-label">Items</label>
+                </div>
+            </div>
+        </fieldset>
+        <fieldset>
+            <legend>Sorting Options</legend>
+            <div class="center-container">
+                <div style="min-width:175px; max-width:175px; text-align:left;">
+                    <input type="checkbox" class="checkbox-input" id="alphabetical_sort" value="alphabetical_sort" checked>
+                    <label for="alphabetical_sort" class="checkbox-label">Alphabetical</label>
+                </div>
+                <div>
+                    <input type="radio" class="radio-input" id="alphabetical_sort_ascending" name="alphabetical_sort_direction" value="ascending" checked>
+                    <label for="alphabetical_sort_ascending" class="radio-label">Ascending</label>
+                </div>
+                <div>
+                    <input type="radio" class="radio-input" id="alphabetical_sort_descending" name="alphabetical_sort_direction" value="descending">
+                    <label for="alphabetical_sort_descending" class="radio-label">Descending</label>
+                </div>
+                <select name="priority" id="alphabetical_sort_priority">
+                    <option>1</option>
+                    <option>2</option>
+                    <option>3</option>
+                </select>
+            </div>
+            <br>
+
+            <div class="center-container">
+                <div style="min-width:175px; max-width:175px; text-align:left;">
+                    <input type="checkbox" class="checkbox-input" id="name_length_sort" value="name_length_sort">
+                    <label for="name_length_sort" class="checkbox-label">Name Length</label>
+                </div>
+                <div>
+                    <input type="radio" class="radio-input" id="name_length_sort_ascending" name="name_length_sort_direction" value="ascending" checked>
+                    <label for="name_length_sort_ascending" class="radio-label">Ascending</label>
+                </div>
+                <div>
+                    <input type="radio" class="radio-input" id="name_length_sort_descending" name="name_length_sort_direction" value="descending">
+                    <label for="name_length_sort_descending" class="radio-label">Descending</label>
+                </div>
+                <select name="priority" id="name_length_sort_priority">
+                    <option>1</option>
+                    <option>2</option>
+                    <option>3</option>
+                </select>
+            </div>
+            <br>
+
+            <div class="center-container">
+                <div style="min-width:175px; max-width:175px; text-align:left;">
+                    <input type="checkbox" class="checkbox-input" id="age_sort" value="age_sort">
+                    <label for="age_sort" class="checkbox-label">Age</label>
+                </div>
+                <div>
+                    <input type="radio" class="radio-input" id="age_sort_ascending" name="age_sort_direction" value="ascending" checked>
+                    <label for="age_sort_ascending" class="radio-label">Ascending</label>
+                </div>
+                <div>
+                    <input type="radio" class="radio-input" id="age_sort_descending" name="age_sort_direction" value="descending">
+                    <label for="age_sort_descending" class="radio-label">Descending</label>
+                </div>
+                <select name="priority" id="age_sort_priority">
+                    <option>1</option>
+                    <option>2</option>
+                    <option>3</option>
+                </select>
+            </div>
+        </fieldset>
+        <fieldset>
+            <legend>Display Options</legend>
+            <label for="num_columns" class="number-label">Number of Columns: </label>
+            <input type="text" inputmode="numeric" pattern="[0-9]*" class="number-input" id="num_columns" value="1" style="max-width:50px;">
+        </fieldset>
+        <br>
+        <button id="list_selection_submit" style="margin:0 auto;display:block;font-size:2em;">Update List</button>
         <br>
 
-        <p>Version:
-            <select name="minecraft_version" id="minecraft_version">
-                <?php
-                foreach ($versions as $version){?>
-                    <option value=<?php echo $version->value?>><?php echo $version->name?></option>
-                <?php
-                }
-                ?>
-            </select>
-        </p>
-    </fieldset>
-    <fieldset>
-        <legend>Item Type Filter Options</legend>
-        <input type="checkbox" class="checkbox-input" id="item_type_1" name="itemType1" value="Blocks" checked>
-            <label for="itemType1" class="checkbox-label">Blocks</label>
-        <input type="checkbox" class="checkbox-input" id="item_type_2" name="itemType2" value="Items" checked>
-            <label for="itemType2" class="checkbox-label">Items</label>
-    </fieldset>
-    <fieldset>
-        <legend>Sorting Options</legend>
-        <input type="checkbox" class="checkbox-input" id="alphabetical_sort" value="alphabetical_sort" checked>
-        <label for="alphabetical_sort" class="checkbox-label">Alphabetical</label>
-        <input type="radio" class="radio-input" id="alphabetical_sort_ascending" name="alphabetical_sort_direction" value="ascending" checked>
-        <label for="alphabetical_sort_ascending" class="radio-label">Ascending</label>
-        <input type="radio" class="radio-input" id="alphabetical_sort_descending" name="alphabetical_sort_direction" value="descending">
-        <label for="alphabetical_sort_descending" class="radio-label">Descending</label>
-        <select name="priority" id="alphabetical_sort_priority">
-            <option>1</option>
-            <option>2</option>
-            <option>3</option>
-        </select>
+        <h2>List</h2>
+        <div class="right-container">
+            <button id="copy_to_clipboard" style="font-size:1em;">Copy List to Clipboard</button>
+        </div>
+        <div class="right-container">
+            <button id="export_to_csv" style="font-size:1em;">Export List to CSV</button>
+        </div>
         <br>
-
-        <input type="checkbox" class="checkbox-input" id="name_length_sort" value="name_length_sort">
-        <label for="name_length_sort" class="checkbox-label">Name Length</label>
-        <input type="radio" class="radio-input" id="name_length_sort_ascending" name="name_length_sort_direction" value="ascending" checked>
-        <label for="name_length_sort_ascending" class="radio-label">Ascending</label>
-        <input type="radio" class="radio-input" id="name_length_sort_descending" name="name_length_sort_direction" value="descending">
-        <label for="name_length_sort_descending" class="radio-label">Descending</label>
-        <select name="priority" id="name_length_sort_priority">
-            <option>1</option>
-            <option>2</option>
-            <option>3</option>
-        </select>
-        <br>
-
-        <input type="checkbox" class="checkbox-input" id="age_sort" value="age_sort">
-        <label for="age_sort" class="checkbox-label">Age</label>
-        <input type="radio" class="radio-input" id="age_sort_ascending" name="age_sort_direction" value="ascending" checked>
-        <label for="age_sort_ascending" class="radio-label">Ascending</label>
-        <input type="radio" class="radio-input" id="age_sort_descending" name="age_sort_direction" value="descending">
-        <label for="age_sort_descending" class="radio-label">Descending</label>
-        <select name="priority" id="age_sort_priority">
-            <option>1</option>
-            <option>2</option>
-            <option>3</option>
-        </select>
-    </fieldset>
-    <fieldset>
-        <legend>Display Options</legend>
-        <label for="num_columns" class="number-label">Number of Columns: </label>
-        <input type="text" inputmode="numeric" pattern="[0-9]*" class="number-input" id="num_columns" value="1">
-    </fieldset>
-
-    <button id="list_selection_submit" style="margin:0 auto;display:block" font-size=1.5em>Update List</button>
-
-    <h2>List</h2>
-    <button id="copy_to_clipboard" style="float:right;">📋</button>
-    <table id="minecraft_list" style="width:70vw;">
-        <?php echo get_minecraft_list_table_html($names,$numColumns)?>
-    </table>
+        <div id="minecraft_list_container" class="table-container">
+            <table id="minecraft_list" cellpadding="5">
+                <?php echo get_minecraft_list_table_html($names,$numColumns)?>
+            </table>
+        </div>
+    </body>
     <?php
 }
 function get_minecraft_list_table_html($names,$numColumns){
@@ -476,7 +587,7 @@ function get_minecraft_list_table_html($names,$numColumns){
             $nameIndex++;
             if ($nameIndex>=$numNames){
                 $keepgoing = false;
-                break;//!!!This should just break out of the for and not the while
+                break;
             }
             $name = $names[$nameIndex];
         }
@@ -498,15 +609,13 @@ function generate_minecraft_list_table_html_ajax(){
 
     $numColumns = (int)$_POST['numColumns'];
 
-    $names = get_item_names($versionFilterType,$versionValue,$includeBlocks,$includeItems,$sortingValues,true);//!!!global names should be set here
+    $names = get_item_names($versionFilterType,$versionValue,$includeBlocks,$includeItems,$sortingValues);
     update_option('list',$names);
     echo get_minecraft_list_table_html($names,$numColumns);
     wp_die();
 }
 function get_names_ajax(){
-    // echo json_encode($names);
     echo json_encode(get_option('list'));
-    // echo count(get_option('list'));//!!!TEST
     wp_die();
 }
 

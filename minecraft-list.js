@@ -1,8 +1,8 @@
 var copyText = "";
 
 jQuery(document).ready(function($){
-    update_list();
-
+    // update_list();
+    copyText = generate_list_copy_text();
     update_version_dropdown();
     update_sorting_options("alphabetical");
     update_sorting_options("name_length");
@@ -29,6 +29,11 @@ jQuery(document).ready(function($){
     jQuery('#copy_to_clipboard').click(function($){
         navigator.clipboard.writeText(copyText);
         alert("list copied to clipboard");
+    });
+    jQuery('#export_to_csv').click(function($){
+        //!!!create and download a csv from the data currently in the table
+        var csvData = create_csv_data_from_table("#minecraft_list");
+        download_csv_file(csvData);
     });
 });
 
@@ -140,7 +145,7 @@ function generate_list_copy_text(){
         data:{
             action: 'get_names',
         },
-        async: false,
+        async: false,//!!This is bad practice on the main thread
         success:function(response){
             names = JSON.parse(response);
         }
@@ -150,4 +155,36 @@ function generate_list_copy_text(){
         copyText += name + "\n";
     }
     return copyText;
+}
+function create_csv_data_from_table(tableID){
+    var csvData = [];
+    var rows = jQuery(tableID).children('tr');
+    for (let i=0; i<rows.length; i++){
+        var csvRow = [];
+        var row = rows.eq(i);
+        var cells = row.children('td');
+        for (let j=0; j<cells.length; j++){
+            csvRow.push(cells.eq(j).text());
+        }
+        csvData.push(csvRow.join(","));
+    }
+    csvData = csvData.join("\n");
+    console.log(csvData);
+    return csvData;
+}
+function download_csv_file(csvData){
+    //create csv from data
+    csvFile = new Blob([csvData], {type: "text/csv"});
+    //download csv
+    let tempLink = document.createElement('a');
+    tempLink.download = "minecraft_items.csv";
+    let url = window.URL.createObjectURL(csvFile);
+    tempLink.href = url;
+    tempLink.style.display = "none";
+    document.body.appendChild(tempLink)
+    tempLink.click();
+    document.body.removeChild(tempLink);
+    //alert user
+    alert("csv file downloaded");
+    console.log("csv downloaded");
 }
