@@ -72,6 +72,7 @@ function create_blocks_table(){
         name varchar(255),
         versionAddedID mediumint(9),
         versionRemovedID mediumint(9),
+        obtainableType tinyint(9),
         PRIMARY KEY (id)
     ) {$charset_collate}";
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
@@ -87,6 +88,8 @@ function create_blocks_table(){
         // find the version IDs
         $versionAddedID = get_version_id($blockData[5]);
         $versionRemovedID = get_version_id($blockData[6]);
+        //find obtainableType
+        $obtainableType = get_obtainable_type($blockData[18],$blockData[19]);
         //insert this block
         global $wpdb;
         $wpdb->insert(
@@ -95,6 +98,7 @@ function create_blocks_table(){
                 'name' => $blockData[0],
                 'versionAddedID' => $versionAddedID,
                 'versionRemovedID' => $versionRemovedID,
+                'obtainableType' => $obtainableType,
                 )
         );
     }
@@ -110,6 +114,7 @@ function create_items_table(){
         name varchar(255),
         versionAddedID mediumint(9),
         versionRemovedID mediumint(9),
+        obtainableType tinyint(9),
         PRIMARY KEY (id)
     ) {$charset_collate}";
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
@@ -125,6 +130,8 @@ function create_items_table(){
         // find the version IDs
         $versionAddedID = get_version_id($itemData[5]);
         $versionRemovedID = get_version_id($itemData[6]);
+        // find obtainableType
+        $obtainableType = get_obtainable_type($itemData[14],$itemData[15]);//Out of bounds error?
         //insert this item
         global $wpdb;
         $wpdb->insert(
@@ -133,6 +140,7 @@ function create_items_table(){
                 'name' => $itemData[0],
                 'versionAddedID' => $versionAddedID,
                 'versionRemovedID' => $versionRemovedID,
+                'obtainableType' => $obtainableType,
                 )
         );
     }
@@ -168,15 +176,26 @@ function get_version_id($versionName){
     }
     return null;
 }
+function get_obtainable_type($obtainableText,$encounterableText){
+    //In the sheet, I put "no" if it is false and leave it blank otherwise, so check for not empty string suffices
+    $obtainable = ($obtainableText=="") ? true : false;
+    $encounterable = ($encounterableText=="") ? true : false;
+    if ($obtainable){return 1;}
+    else if ($encounterable){return 2;}
+    else{return 3;}
+}
 
-function get_item_names($versionFilterType="all_items",$versionValue=999,$includeBlocks=true,$includeItems=true,$sortingValues=[["alphabetical",true,"ascending",1]],$includeSQL=false,$debugValues=[]){
+function get_item_names($versionFilterType="all_items",$versionValue=999,$includeBlocks=true,$includeItems=true,
+        $includeObtainable=true,$includeUnobtainableButEncounterable=false,$includeUnencounterable=false,
+        $sortingValues=[["alphabetical",true,"ascending",1]],$includeSQL=false,$debugValues=[]){
     global $wpdb;
     $blockTableName = $wpdb->prefix . "MinecraftBlocks";
     $itemTableName = $wpdb->prefix . "MinecraftItems";
     $versionTableName = $wpdb->prefix . "MinecraftVersions";
     //alias definitions
     $sql = "WITH ";
-    $neededItemsQuery = get_needed_items_query($includeBlocks,$includeItems,$blockTableName,$itemTableName);//creates table with alias neededItems
+    $neededItemsQuery = get_needed_items_query($includeBlocks,$includeItems,$includeObtainable,
+            $includeUnobtainableButEncounterable,$includeUnencounterable,$blockTableName,$itemTableName);//creates table with alias neededItems
     if (is_null($neededItemsQuery)){
         return [];
     }
@@ -256,19 +275,71 @@ function get_item_names($versionFilterType="all_items",$versionValue=999,$includ
     return $names;
 }
 
-function get_needed_items_query($includeBlocks, $includeItems, $blockTableName, $itemTableName){
-    $sql = " neededItems AS";
-    if ($includeItems===true && $includeBlocks===true){
-        $neededItems = " (SELECT name, versionAddedID, versionRemovedID FROM {$blockTableName} UNION
-        SELECT name, versionAddedID, versionRemovedID FROM {$itemTableName})";
-    }elseif ($includeItems===true) {
-        $neededItems = " (SELECT name, versionAddedID, versionRemovedID FROM {$itemTableName})";
-    }elseif ($includeBlocks===true) {
-        $neededItems = " (SELECT name, versionAddedID, versionRemovedID FROM {$blockTableName})";
-    }else{
-        return null;
+function get_needed_items_query($includeBlocks, $includeItems, $includeObtainable,
+        $includeUnobtainableButEncounterable, $includeUnencounterable, $blockTableName, $itemTableName){
+    //Check if no items are needed
+    if (!$includeItems && !$includeBlocks){return null;}
+    if (!$includeObtainable && !$includeUnobtainableButEncounterable && !$includeUnencounterable){return null;}
+    //Create the Query
+    $sql = " neededItems AS (";
+    if ($includeBlocks){
+        $sql .= "SELECT name, versionAddedID, versionRemovedID FROM {$blockTableName}";
+        $sql .= " WHERE (";
+        $oneTypeIncluded = false;
+        if ($includeObtainable){
+            if ($oneTypeIncluded){
+                $sql .= " OR ";
+            }
+            $sql .= "obtainableType=1";
+            $oneTypeIncluded = true;
+        }
+        if ($includeUnobtainableButEncounterable){
+            if ($oneTypeIncluded){
+                $sql .= " OR ";
+            }
+            $sql .= "obtainableType=2";
+            $oneTypeIncluded = true;
+        }
+        if ($includeUnencounterable){
+            if ($oneTypeIncluded){
+                $sql .= " OR ";
+            }
+            $sql .= "obtainableType=3";
+            $oneTypeIncluded = true;
+        }
+        $sql .= ")";
     }
-    $sql .= $neededItems;
+    if ($includeItems && $includeBlocks===true){
+        $sql .= " UNION ";
+    }
+    if ($includeItems===true){
+        $sql .= "SELECT name, versionAddedID, versionRemovedID FROM {$itemTableName}";
+        $sql .= " WHERE (";
+        $oneTypeIncluded = false;
+        if ($includeObtainable){
+            if ($oneTypeIncluded){
+                $sql .= " OR ";
+            }
+            $sql .= "obtainableType=1";
+            $oneTypeIncluded = true;
+        }
+        if ($includeUnobtainableButEncounterable){
+            if ($oneTypeIncluded){
+                $sql .= " OR ";
+            }
+            $sql .= "obtainableType=2";
+            $oneTypeIncluded = true;
+        }
+        if ($includeUnencounterable){
+            if ($oneTypeIncluded){
+                $sql .= " OR ";
+            }
+            $sql .= "obtainableType=3";
+            $oneTypeIncluded = true;
+        }
+        $sql .= ")";
+    }
+    $sql .=")";
     return $sql;
 }
 function get_added_items_query($versionValue, $versionTableName){
@@ -324,6 +395,9 @@ function get_versions($ascending){
 function show_minecraft_list(){
     ob_start();
     $names = get_item_names();
+    // $names = get_item_names("all_items",999,true,
+    //         true,true,false,false,
+    //         [["alphabetical",true,"ascending",1]],true,[]);
     update_option('list',$names);
     $versions = get_versions(false);
     create_minecraft_list_html($names,$versions);
@@ -416,6 +490,9 @@ function create_minecraft_list_html($names, $versions, $numColumns=1){
             padding-top:0px;
             padding-bottom:0px;
         }
+        .disabled{
+            opacity: 0.2;
+        }
         *:disabled{
             opacity: 0.2;
         }
@@ -467,27 +544,57 @@ function create_minecraft_list_html($names, $versions, $numColumns=1){
                     <label for="itemType2" class="checkbox-label">Items</label>
                 </div>
             </div>
+            <div class="center-container">
+                <div>
+                    <input type="checkbox" class="checkbox-input" id="obtainability_type_1" name="obtainabilityType1" value="Obtainable" checked>
+                    <label for="itemType1" class="checkbox-label">Obtainable</label>
+                </div>
+                <div>
+                    <input type="checkbox" class="checkbox-input" id="obtainability_type_2" name="obtainabilityType2" value="UnobtainableButEncounterable">
+                    <label for="itemType2" class="checkbox-label">Unobtainable but Encounterable </label>
+                </div>
+                <div>
+                    <input type="checkbox" class="checkbox-input" id="obtainability_type_3" name="obtainabilityType3" value="Unencounterable">
+                    <label for="itemType2" class="checkbox-label">Unencounterable</label>
+                </div>
+            </div>
+
         </fieldset>
         <fieldset>
             <legend>Sorting Options</legend>
+            <div class="center-container">
+                <div style="min-width:175px; max-width:175px;">
+                    <p style="text-align:left;">Sort Type</p>
+                </div>
+                <div style="min-width:300px; max-width:300px;">
+                    <p style="text-align:center;">Direction</p>
+                </div>
+                <div style="min-width:100px; max-width:100px;">
+                    <p style="text-align:right;">Priority</p>
+                </div>
+            </div>
+            <br>
+
             <div class="center-container">
                 <div style="min-width:175px; max-width:175px; text-align:left;">
                     <input type="checkbox" class="checkbox-input" id="alphabetical_sort" value="alphabetical_sort" checked>
                     <label for="alphabetical_sort" class="checkbox-label">Alphabetical</label>
                 </div>
-                <div>
+                <div style="min-width:150px; max-width:150px;">
                     <input type="radio" class="radio-input" id="alphabetical_sort_ascending" name="alphabetical_sort_direction" value="ascending" checked>
                     <label for="alphabetical_sort_ascending" class="radio-label">Ascending</label>
                 </div>
-                <div>
+                <div style="min-width:150px; max-width:150px;">
                     <input type="radio" class="radio-input" id="alphabetical_sort_descending" name="alphabetical_sort_direction" value="descending">
                     <label for="alphabetical_sort_descending" class="radio-label">Descending</label>
                 </div>
-                <select name="priority" id="alphabetical_sort_priority">
-                    <option>1</option>
-                    <option>2</option>
-                    <option>3</option>
-                </select>
+                <div style="min-width:100px; max-width:100px;">
+                    <select name="priority" id="alphabetical_sort_priority">
+                        <option>1</option>
+                        <option>2</option>
+                        <option>3</option>
+                    </select>
+                </div>
             </div>
             <br>
 
@@ -496,19 +603,21 @@ function create_minecraft_list_html($names, $versions, $numColumns=1){
                     <input type="checkbox" class="checkbox-input" id="name_length_sort" value="name_length_sort">
                     <label for="name_length_sort" class="checkbox-label">Name Length</label>
                 </div>
-                <div>
+                <div style="min-width:150px; max-width:150px;">
                     <input type="radio" class="radio-input" id="name_length_sort_ascending" name="name_length_sort_direction" value="ascending" checked>
                     <label for="name_length_sort_ascending" class="radio-label">Ascending</label>
                 </div>
-                <div>
+                <div style="min-width:150px; max-width:150px;">
                     <input type="radio" class="radio-input" id="name_length_sort_descending" name="name_length_sort_direction" value="descending">
                     <label for="name_length_sort_descending" class="radio-label">Descending</label>
                 </div>
-                <select name="priority" id="name_length_sort_priority">
-                    <option>1</option>
-                    <option>2</option>
-                    <option>3</option>
-                </select>
+                <div style="min-width:100px; max-width:100px;">
+                    <select name="priority" id="name_length_sort_priority">
+                        <option>1</option>
+                        <option>2</option>
+                        <option>3</option>
+                    </select>
+                </div>
             </div>
             <br>
 
@@ -517,19 +626,21 @@ function create_minecraft_list_html($names, $versions, $numColumns=1){
                     <input type="checkbox" class="checkbox-input" id="age_sort" value="age_sort">
                     <label for="age_sort" class="checkbox-label">Age</label>
                 </div>
-                <div>
+                <div style="min-width:150px; max-width:150px;">
                     <input type="radio" class="radio-input" id="age_sort_ascending" name="age_sort_direction" value="ascending" checked>
                     <label for="age_sort_ascending" class="radio-label">Ascending</label>
                 </div>
-                <div>
+                <div style="min-width:150px; max-width:150px;">
                     <input type="radio" class="radio-input" id="age_sort_descending" name="age_sort_direction" value="descending">
                     <label for="age_sort_descending" class="radio-label">Descending</label>
                 </div>
-                <select name="priority" id="age_sort_priority">
-                    <option>1</option>
-                    <option>2</option>
-                    <option>3</option>
-                </select>
+                <div style="min-width:100px; max-width:100px;">
+                    <select name="priority" id="age_sort_priority">
+                        <option>1</option>
+                        <option>2</option>
+                        <option>3</option>
+                    </select>
+                </div>
             </div>
         </fieldset>
         <fieldset>
@@ -580,6 +691,10 @@ function get_minecraft_list_table_html($names,$numColumns){
 function generate_minecraft_list_table_html_ajax(){
     $includeBlocks = string_to_bool($_POST['includeBlocks']);
     $includeItems = string_to_bool($_POST['includeItems']);
+    $includeObtainable = string_to_bool($_POST['includeObtainable']);
+    $includeUnobtainableButEncounterable = string_to_bool($_POST['includeUnobtainableButEncounterable']);
+    $includeUnencounterable = string_to_bool($_POST['includeUnencounterable']);
+
     $versionValue = (int)$_POST['versionValue'];
     $versionFilterType= $_POST['versionFilterType'];
 
@@ -589,8 +704,9 @@ function generate_minecraft_list_table_html_ajax(){
     $sortingValues = get_filtered_sorting_values([$alphabeticalSortValues,$nameLengthSortValues,$ageSortValues]);
 
     $numColumns = (int)$_POST['numColumns'];
-
-    $names = get_item_names($versionFilterType,$versionValue,$includeBlocks,$includeItems,$sortingValues);
+    $names = get_item_names($versionFilterType,$versionValue,$includeBlocks,$includeItems,
+            $includeObtainable,$includeUnobtainableButEncounterable,$includeUnencounterable,
+            $sortingValues,false,[]);
     update_option('list',$names);
     echo get_minecraft_list_table_html($names,$numColumns);
     wp_die();

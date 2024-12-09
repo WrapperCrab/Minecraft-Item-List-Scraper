@@ -31,7 +31,7 @@ jQuery(document).ready(function($){
         alert("list copied to clipboard");
     });
     jQuery('#export_to_csv').click(function($){
-        //!!!create and download a csv from the data currently in the table
+        //create and download a csv from the data currently in the table
         var csvData = create_csv_data_from_table("#minecraft_list");
         download_csv_file(csvData);
     });
@@ -41,8 +41,12 @@ function update_list(){
     //get data from input elements
     var versionValue = jQuery('#minecraft_version').find(":selected").val();
     var versionFilterType = jQuery("input[type='radio'][name=version_filter]:checked").val();
+
     var showBlocks = jQuery('#item_type_1').is(":checked");
     var showItems = jQuery('#item_type_2').is(":checked");
+    var showObtainable = jQuery('#obtainability_type_1').is(":checked");
+    var showUnobtainableButEncounterable = jQuery('#obtainability_type_2').is(":checked");
+    var showUnencounterable = jQuery('#obtainability_type_3').is(":checked");
 
     var sortAlphabetical = jQuery('#alphabetical_sort').is(":checked");
     var alphabeticalDirection = jQuery("input[type='radio'][name=alphabetical_sort_direction]:checked").val();
@@ -66,6 +70,9 @@ function update_list(){
             action: 'generate_minecraft_list_table_html',
             'includeBlocks':showBlocks,
             'includeItems':showItems,
+            'includeObtainable':showObtainable,
+            'includeUnobtainableButEncounterable':showUnobtainableButEncounterable,
+            'includeUnencounterable':showUnencounterable,
 
             'versionValue':versionValue,
             'versionFilterType':versionFilterType,
@@ -105,18 +112,39 @@ function update_sorting_options(sortType){
             jQuery('#alphabetical_sort_ascending').prop('disabled',!sortEnabled);
             jQuery('#alphabetical_sort_descending').prop('disabled',!sortEnabled);
             jQuery('#alphabetical_sort_priority').prop('disabled',!sortEnabled);
+            if (sortEnabled){
+                jQuery('label[for="alphabetical_sort_ascending"]').removeClass("disabled");
+                jQuery('label[for="alphabetical_sort_descending"]').removeClass("disabled");
+            }else{
+                jQuery('label[for="alphabetical_sort_ascending"]').addClass("disabled");
+                jQuery('label[for="alphabetical_sort_descending"]').addClass("disabled");
+            }
             break;
         case "name_length":
             var sortEnabled = jQuery('#name_length_sort').is(":checked");
             jQuery('#name_length_sort_ascending').prop('disabled',!sortEnabled);
             jQuery('#name_length_sort_descending').prop('disabled',!sortEnabled);
             jQuery('#name_length_sort_priority').prop('disabled',!sortEnabled);
+            if (sortEnabled){
+                jQuery('label[for="name_length_sort_ascending"]').removeClass("disabled");
+                jQuery('label[for="name_length_sort_descending"]').removeClass("disabled");
+            }else{
+                jQuery('label[for="name_length_sort_ascending"]').addClass("disabled");
+                jQuery('label[for="name_length_sort_descending"]').addClass("disabled");
+            }
             break;
         case "age":
             var sortEnabled = jQuery('#age_sort').is(":checked");
             jQuery('#age_sort_ascending').prop('disabled',!sortEnabled);
             jQuery('#age_sort_descending').prop('disabled',!sortEnabled);
             jQuery('#age_sort_priority').prop('disabled',!sortEnabled);
+            if (sortEnabled){
+                jQuery('label[for="age_sort_ascending"]').removeClass("disabled");
+                jQuery('label[for="age_sort_descending"]').removeClass("disabled");
+            }else{
+                jQuery('label[for="age_sort_ascending"]').addClass("disabled");
+                jQuery('label[for="age_sort_descending"]').addClass("disabled");
+            }
             break;
         default:
             console.log("Unknown sorting option: ".concat(sortType));
@@ -127,7 +155,7 @@ function update_num_columns(){
     if ((!/^[0-9]*$/.test(numColumns)) || (/^0*$/.test(numColumns))) {
         //this is invalid input check if it can be rounded to nearest integer
         var betterValue = parseFloat(numColumns).toFixed(0);
-        if (isNaN(betterValue) || betterValue==0){
+        if (isNaN(betterValue) || betterValue<=0){
             jQuery('#num_columns').val("1");
         }else{
             jQuery('#num_columns').val(betterValue.toString());

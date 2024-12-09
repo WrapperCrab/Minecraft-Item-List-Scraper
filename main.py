@@ -179,7 +179,7 @@ def get_item_info(link, parameterShift=3, findVersionRemoved=False):
 		itemInfo.extend(infoBoxInfo)
 	#return the needed data as a list
 	return itemInfo
-def get_item_info_box_info(infoBox, parameterShift=7):#!!!Fill in parameter shift default
+def get_item_info_box_info(infoBox, parameterShift=7):
 	# returns [rarity_tier, renewable, stackable, durability, armor, restores, status_effects]
 	info = ["?", "?", "?", "?", "?", "?", "?"]
 	infoBoxValueAreas = infoBox.find_all('tr')
@@ -314,7 +314,7 @@ def get_redirect_info(soup, link):
 	#link and newLink are of form "https://www.minecraft.wiki/xxxx#xxxxx"
 	newLink = get_canonical_link(soup)
 	isRedirect = False
-	#remove the
+	#remove the #
 	linkBase = link.split('#')[0]
 	newLinkBase = newLink.split('#')[0]
 	if linkBase!=newLinkBase:
