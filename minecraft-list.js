@@ -40,6 +40,8 @@ jQuery(document).ready(function($){
 });
 
 function update_list(){
+    //Show the loading gif
+    jQuery('#loading_icon').show();
     //get data from input elements
     var versionValue = jQuery('#minecraft_version').find(":selected").val();
     var versionFilterType = jQuery("input[type='radio'][name=version_filter]:checked").val();
@@ -100,6 +102,8 @@ function update_list(){
             jQuery("#minecraft_list").html(tableHtml);
             sessionStorage.setItem("names",JSON.stringify(names));
             jQuery("#num_results").text(names.length + " results found");
+            //Hide the loading gif
+            jQuery('#loading_icon').hide();
         },
         error:function(errorObject, exception){
             console.log(exception);

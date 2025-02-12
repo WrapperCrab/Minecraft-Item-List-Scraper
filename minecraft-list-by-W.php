@@ -705,6 +705,9 @@ function create_minecraft_list_html($info, $versions, $numColumns=1){
         <div class="right-container">
             <button id="export_to_csv" style="font-size:1em;">Export List to CSV</button>
         </div>
+
+        <div id="loading_icon" class="center-container"><img src="https://www.mowinpeople.com/wp-content/plugins/minecraft-list-by-W/Ajax-loader.gif"></div>
+
         <p id="num_results" align="center"><?php echo count($info[0]);?> results found</p>
         <div id="minecraft_list_container" class="table-container">
             <table id="minecraft_list" cellpadding="5">
