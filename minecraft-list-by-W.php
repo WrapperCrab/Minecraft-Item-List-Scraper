@@ -19,10 +19,6 @@ function minecraft_list_js_init(){
 //add_action(wp_ajax_(func called in ajax), func to call here);
 add_action('wp_ajax_generate_minecraft_list_table_html','generate_minecraft_list_table_html_ajax');
 add_action('wp_ajax_nopriv_generate_minecraft_list_table_html','generate_minecraft_list_table_html_ajax');
-add_action('wp_ajax_get_names','get_names_ajax');
-add_action('wp_ajax_nopriv_get_names','get_names_ajax');
-
-add_option('list',[]);//stores the current list of minecraft items as an array of strings
 
 //database write funcs
 function create_tables(){
@@ -451,7 +447,6 @@ function show_minecraft_list(){
     // $info = get_item_information("all_items",999,true,
     //         true,true,false,false,
     //         [["alphabetical",true,"ascending",1]],true,[]);
-    update_option('list',$info[0]);
     $versions = get_versions(false);
     create_minecraft_list_html($info,$versions);
     return ob_get_clean();
@@ -710,6 +705,7 @@ function create_minecraft_list_html($info, $versions, $numColumns=1){
         <div class="right-container">
             <button id="export_to_csv" style="font-size:1em;">Export List to CSV</button>
         </div>
+        <p id="num_results" align="center"><?php echo count($info[0]);?> results found</p>
         <div id="minecraft_list_container" class="table-container">
             <table id="minecraft_list" cellpadding="5">
                 <?php echo get_minecraft_list_table_html($info,$numColumns)?>
@@ -748,6 +744,7 @@ function get_minecraft_list_table_html($info, $numColumns){
 }
 //ajax funcs
 function generate_minecraft_list_table_html_ajax(){
+    //Returns the html for the table along with other data in a json encoded array
     $includeBlocks = string_to_bool($_POST['includeBlocks']);
     $includeItems = string_to_bool($_POST['includeItems']);
     $includeObtainable = string_to_bool($_POST['includeObtainable']);
@@ -769,15 +766,10 @@ function generate_minecraft_list_table_html_ajax(){
             $includeObtainable,$includeUnobtainableButEncounterable,$includeUnencounterable,
             $sortingValues,false,[]);
     $names = $info[0];
-    update_option('list',$names);
-    echo get_minecraft_list_table_html($info,$numColumns);
+    $wantedData = [get_minecraft_list_table_html($info,$numColumns), $names];
+    echo json_encode($wantedData);
     wp_die();
 }
-function get_names_ajax(){
-    echo json_encode(get_option('list'));
-    wp_die();
-}
-
 function get_filtered_sorting_values($sortData){
     //$sortData like: [[$thisSortName, $useThisSortBool, $thisSortDirection, $thisSortPriority],...]
     //converts $sortData into an array with only the selected sorts (useThisSortBool is true) in order of increasing priority

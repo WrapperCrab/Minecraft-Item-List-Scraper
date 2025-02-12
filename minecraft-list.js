@@ -1,13 +1,15 @@
 jQuery(document).ready(function($){
-    // update_list();
+    //initialize session storage vars
     sessionStorage.setItem("numColumns",1);
-    update_names();
-
+    sessionStorage.setItem("names","");
+    //reload the list to update sessionStorage vars
+    update_list();
+    //reload input fields
     update_version_dropdown();
     update_sorting_options("alphabetical");
     update_sorting_options("name_length");
     update_sorting_options("age");
-
+    //connect click signals
     jQuery("#list_selection_submit").click(function($){
         update_list();
     });
@@ -92,8 +94,12 @@ function update_list(){
             'numColumns':numColumns,
         },
         success:function(response){
-            jQuery("#minecraft_list").html(response);
-            update_names();
+            data = JSON.parse(response);
+            tableHtml = data[0];
+            names = data[1];
+            jQuery("#minecraft_list").html(tableHtml);
+            sessionStorage.setItem("names",JSON.stringify(names));
+            jQuery("#num_results").text(names.length + " results found");
         },
         error:function(errorObject, exception){
             console.log(exception);
@@ -167,22 +173,6 @@ function update_num_columns(){
         newNumColumns = parseInt(numColumnsText);
     }
     sessionStorage.setItem('numColumns',newNumColumns);
-}
-
-function update_names(){
-    //update the sessionStorage variable names
-    var names = new Array();
-    jQuery.ajax({
-        type:"POST",
-        url: ajax_object.ajaxurl,
-        data:{
-            action: 'get_names',
-        },
-        success:function(response){
-            names = JSON.parse(response);
-            sessionStorage.setItem("names",JSON.stringify(names));
-        }
-    });
 }
 
 function names_to_copy_text(names){
