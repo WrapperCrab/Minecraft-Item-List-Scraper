@@ -6,9 +6,12 @@ def main():
 	blocksLink = "https://minecraft.wiki/w/Block"
 	itemsLink = "https://minecraft.wiki/w/Item"
 	firstVersionLink = "https://minecraft.wiki/w/Cave_game_tech_test"
-	# create_blocks_csv(blocksLink, numAnalyze=10, numSkip=939)
+	newVersionLink = "https://minecraft.wiki/w/Java_Edition_1.21.3"
+
+	# create_items_csv(itemsLink, namesToSkip=get_names_in_csv("all_items.csv"))
+	create_blocks_csv(blocksLink, namesToSkip=get_names_in_csv("all_blocks.csv"))
 	# create_items_csv(itemsLink)
-	create_version_history_csv(firstVersionLink)
+	# create_version_history_csv(newVersionLink, startingVersionIndex=324)
 
 blockValueDict = {#attribute title: index in blockInfo
 	"Name": 0,
@@ -19,21 +22,22 @@ blockValueDict = {#attribute title: index in blockInfo
 	"Redirect url": 4,
 	"Version added": 5,
 	"Version removed": 6,
-	"Obtainable": 7,
-	"Craftable": 8,
 
-	"Rarity tier": 9,
-	"Renewable": 10,
-	"Stackable": 11,
-	"Tool": 12,
-	"Tools": 12,
-	"Blast resistance": 13,
-	"Hardness": 14,
-	"Luminous": 15,
-	"Transparent": 16,
-	"Waterloggable": 17,
-	"Flammable": 18,
-	"Catches fire from lava": 19
+	"Rarity tier": 7,
+	"Renewable": 8,
+	"Stackable": 9,
+	"Tool": 10,
+	"Tools": 10,
+	"Blast resistance": 11,
+	"Hardness": 12,
+	"Luminous": 13,
+	"Transparent": 14,
+	"Waterloggable": 15,
+	"Flammable": 16,
+	"Catches fire from lava": 17,
+
+	"Obtainable": 18,
+	"Encounterable": 19,
 }
 itemValueDict = {#attribute title: index in blockInfo
 	"Name": 0,
@@ -44,7 +48,7 @@ itemValueDict = {#attribute title: index in blockInfo
 	"Redirect url": 4,
 	"Version added": 5,
 	"Version removed": 6,
-	#!!!Need to test to make sure these strings are right
+
 	"Rarity tier": 7,
 	"Renewable": 8,
 	"Stackable": 9,
@@ -52,6 +56,9 @@ itemValueDict = {#attribute title: index in blockInfo
 	"Armor": 11,
 	"Restores": 12,
 	"Status effects": 13,
+
+	"Obtainable": 14,
+	"Encounterable": 15,
 }
 toolDict = {#link extension: tool name
 	"/w/Pickaxe": "Pickaxe",
@@ -70,8 +77,56 @@ toolDict = {#link extension: tool name
 javaEditions = ["Java Edition pre-Classic", "Java Edition Classic", "Java Edition Indev",
 				"Java Edition Infdev", "Java Edition Alpha", "Java Edition Beta", "Java Edition"]
 
+#create versions csv funcs
+def create_version_history_csv(firstVersionLink, numAnalyze=0, startingVersionIndex=0):
+	#cycles through the java version pages and records each version name in order in a csv
+	#create the output csv
+	with open("versions.csv", 'w', newline='') as file:
+		writer = csv.writer(file)
+		#generate header line of csv
+		field = ["version name", "version Index"]
+		writer.writerow(field)
+		link = firstVersionLink
+		keepgoing=True
+		linkIndex = startingVersionIndex
+		while keepgoing:
+			headers = {'User-Agent' : 'MowBot/1.0 (winter@starcrossonline.com)',}
+			req = requests.get(link, allow_redirects=False, headers=headers)
+			# print(req.status_code)
+			contents = req.text
+			soup = BeautifulSoup(contents, 'html.parser')
+			# print(soup.prettify())
+			versionName = get_version_name(soup)
+			print(linkIndex, " ", versionName)#debug
+			writer.writerow([versionName, linkIndex])
+			nextLink = get_next_version_link(soup)
+			if nextLink==False:
+				keepgoing = False
+			link = nextLink
+
+			linkIndex+=1
+			if numAnalyze and (linkIndex>numAnalyze):
+				keepgoing = False
+	print("versions.csv successfully created!")
+def get_version_name(soup):
+	return soup.find(id="firstHeading").text
+def get_next_version_link(soup):
+	wikiPrefix = "https://minecraft.wiki"
+	versionLinkTags = soup.find(class_="infobox-footer").find_all('a')
+	bestFoundLink = ""
+	for tag in versionLinkTags:
+		tagText = tag.text
+		if ("►" in tagText) and not ("►►" in tagText):
+			return wikiPrefix + tag['href']
+		elif "►►" in tagText:
+			bestFoundLink = wikiPrefix + tag['href']
+	if bestFoundLink:
+		#this clause is here for the pages that have only ►► links with no single arrow
+		return bestFoundLink
+	print("no next link found")
+	return False
 #create items csv funcs
-def create_items_csv(link, numAnalyze=0, numSkip=0):
+def create_items_csv(link, numAnalyze=0, numSkip=0, namesToSkip=[]):
 	#create the output csv
 	with open("items.csv", 'w', newline='') as file:
 		writer = csv.writer(file)
@@ -86,7 +141,8 @@ def create_items_csv(link, numAnalyze=0, numSkip=0):
 			prevValue = value
 		writer.writerow(field)
 		#navigate the main page
-		req = requests.get(link)
+		headers = {'User-Agent' : 'MowBot/1.0 (winter@starcrossonline.com)',}
+		req = requests.get(link, headers=headers)
 		contents = req.text
 		soup = BeautifulSoup(contents, 'html.parser')
 		#find the items lists
@@ -100,19 +156,19 @@ def create_items_csv(link, numAnalyze=0, numSkip=0):
 		# jokeItemsDiv = soup.find(id="Joke_items").parent.find_next_sibling('div')
 		#add the items from these areas
 		divsToAnalyze = [createEntitiesItemsDiv, useableItemsDiv, indirectUseItemsDiv, spawnEggsItemsDiv, removedItemsDiv]
-		add_items_from_divs(divsToAnalyze, writer, numAnalyze, numSkip)
+		add_items_from_divs(divs=divsToAnalyze, writer=writer, numAnalyze=numAnalyze, numSkip=numSkip, namesToSkip=namesToSkip)
 	print("items.csv successfully created!")
-def add_items_from_divs(divs, writer, numAnalyze=0, numSkip=0):
+def add_items_from_divs(divs, writer, numAnalyze=0, numSkip=0, namesToSkip=[]):
 	leftSkip = numSkip
 	leftAnalyze = numAnalyze
 	for divIndex in range(len(divs)):
-		conditions = add_items_from_div(divs[divIndex], writer, leftAnalyze, leftSkip)
+		conditions = add_items_from_div(div=divs[divIndex], writer=writer, numAnalyze=leftAnalyze, numSkip=leftSkip, namesToSkip=namesToSkip)
 		leftAnalyze = conditions[0]
 		leftSkip = conditions[1]
 		if numAnalyze and leftAnalyze==0:
 			break
-def add_items_from_div(div, writer, numAnalyze=0, numSkip=0, findVersionRemoved=False):
-	#returns remaining number to analyze and skip as [numAnalyze, numSkip]
+def add_items_from_div(div, writer, numAnalyze=0, numSkip=0, findVersionRemoved=False, namesToSkip=[]):
+	# returns remaining number to analyze and skip as [numAnalyze, numSkip]
 	leftAnalyze = numAnalyze
 	leftSkip = numSkip
 	items = div.find_all("li")  # entries
@@ -126,22 +182,27 @@ def add_items_from_div(div, writer, numAnalyze=0, numSkip=0, findVersionRemoved=
 				return [0, 0]
 		item = items[index]
 
-		#superscript checking is flawed since many items have multiple, and several items have them to indicate specific features
-		#of the item in only one version. Also also, some have multiple superscript links. Just do this manually for now.
-		#check that this is not a BE only item
-		# if len(item.find_all('sup'))!=0:
-		# 	#there is a superscript, check if it is BE
-		# 	superTextLink = item.sup.i.span.a['href']
-		# 	if superTextLink=="https://minecraft.wiki/w/Bedrock_Edition":
-		# 		print("Item was skipped because it is a Bedrock Edition Exclusive")
-		# 		continue
+		# superscript checking is flawed since many items have multiple, and several items have them to indicate specific features
+		# of the item in only one version. Also also, some have multiple superscript links. Just do this manually for now.
+		# check that this is not a BE only item
+		#if len(item.find_all('sup'))!=0:
+		#	# there is a superscript, check if it is BE
+		#	superTextLink = item.sup.i.span.a['href']
+		#	if superTextLink=="https://minecraft.wiki/w/Bedrock_Edition":
+		#		print("Item was skipped because it is a Bedrock Edition Exclusive")
+		#		continue
+
 
 		#find data for this item
-		# imageUrl = item.find_all("a")[0]['href']
 		imageUrl = item.img['src']
 		itemLinkTag = item.find_all("a")[1]  # returns the a tag that contains the link to its page
 		pageUrl = itemLinkTag['href']
+		# Check if itemName is in namesToSkip
 		itemName = itemLinkTag.contents[0].text
+		if itemName in namesToSkip:
+			print("Skipped " + itemName)
+			continue
+
 		print(index, " ", itemName)  #debug
 
 		# get data from item's page
@@ -149,20 +210,21 @@ def add_items_from_div(div, writer, numAnalyze=0, numSkip=0, findVersionRemoved=
 		# add data to the csv
 		csvLine = [itemName, imageUrl, pageUrl]
 		csvLine.extend(itemInfo)
-		writer.writerow(csvLine)
+		writer.writerow(csvLine) #!! Does not include Obtainable or Encounterable, which is fine.
 		if numAnalyze:
 			leftAnalyze-=1
 	return [leftAnalyze, leftSkip]
 def get_item_info(link, parameterShift=3, findVersionRemoved=False):
-	#returns [is_redirect, redirect_url, version_added, version_removed,
-	#rarity_tier, renewable, stackable, durability, restores, status_effects]
-	#initialize itemInfo (info box info appended later)
+	# returns [is_redirect, redirect_url, version_added, version_removed,
+	# rarity_tier, renewable, stackable, durability, restores, status_effects]
+	# initialize itemInfo (info box info appended later)
 	itemInfo = [False, link, "?", "?"]
-	#navigate the item's page
-	req = requests.get(link, allow_redirects=True)
+	# navigate the item's page
+	headers = {'User-Agent' : 'MowBot/1.0 (winter@starcrossonline.com)',}
+	req = requests.get(link, allow_redirects=True, headers=headers)
 	contents = req.text
 	soup = BeautifulSoup(contents, 'html.parser')
-	#check if there is a redirect
+	# check if there is a redirect
 	redirectInfo = get_redirect_info(soup, link)
 	itemInfo[itemValueDict["Is redirect"]-parameterShift]=redirectInfo[0]
 	itemInfo[itemValueDict["Redirect url"]-parameterShift]=redirectInfo[1]
@@ -193,7 +255,7 @@ def get_item_info_box_info(infoBox, parameterShift=7):
 			print("Unknown item value title of ", valueTitle)
 	return info
 #create blocks csv funcs
-def create_blocks_csv(link, numAnalyze=0, numSkip=0):
+def create_blocks_csv(link, numAnalyze=0, numSkip=0, namesToSkip=[]):
 	#create the output csv
 	with open("blocks.csv", 'w', newline='') as file:
 		writer = csv.writer(file)
@@ -208,7 +270,8 @@ def create_blocks_csv(link, numAnalyze=0, numSkip=0):
 			prevValue = value
 		writer.writerow(field)
 		#navigate the main page
-		req = requests.get(link)
+		headers = {'User-Agent' : 'MowBot/1.0 (winter@starcrossonline.com)',}
+		req = requests.get(link, headers=headers)
 		contents = req.text
 		soup = BeautifulSoup(contents, 'html.parser')
 		#find the block lists (commented ones are unanalyzed)
@@ -221,18 +284,18 @@ def create_blocks_csv(link, numAnalyze=0, numSkip=0):
 		# jokeBlocksDiv = soup.find(id="Joke_blocks").parent.next_sibling.next_sibling
 
 		divsToAnalyze = [blocksDiv, technicalBlocksDiv, outrightRemovedBlocksDiv]
-		add_blocks_from_divs(divsToAnalyze, writer, numAnalyze, numSkip)
+		add_blocks_from_divs(divs=divsToAnalyze, writer=writer, numAnalyze=numAnalyze, numSkip=numSkip, namesToSkip=namesToSkip)
 	print("blocks.csv successfully created!")
-def add_blocks_from_divs(divs, writer, numAnalyze=0, numSkip=0):
+def add_blocks_from_divs(divs, writer, numAnalyze=0, numSkip=0, namesToSkip=[]):
 	leftSkip = numSkip
 	leftAnalyze = numAnalyze
 	for divIndex in range(len(divs)):
-		conditions = add_blocks_from_div(divs[divIndex], writer, leftAnalyze, leftSkip)
+		conditions = add_blocks_from_div(blocksDiv=divs[divIndex], writer=writer, numAnalyze=leftAnalyze, numSkip=leftSkip, namesToSkip=namesToSkip)
 		leftAnalyze = conditions[0]
 		leftSkip = conditions[1]
 		if numAnalyze and leftAnalyze==0:
 			break
-def add_blocks_from_div(blocksDiv, writer, numAnalyze=0, numSkip=0, findVersionRemoved=False):
+def add_blocks_from_div(blocksDiv, writer, numAnalyze=0, numSkip=0, findVersionRemoved=False, namesToSkip=[]):
 	#returns remaining number to analyze and skip as [numAnalyze, numSkip]
 	leftAnalyze = numAnalyze
 	leftSkip = numSkip
@@ -246,18 +309,25 @@ def add_blocks_from_div(blocksDiv, writer, numAnalyze=0, numSkip=0, findVersionR
 			if leftAnalyze==0:
 				return [0, 0]
 		block = blocks[blockIndex]
-		#check that this is not a BE only block
-		if len(block.find_all('sup'))!=0:
-			#there is a superscript, check if it is BE
-			superText = block.sup.i.span.a.text
-			if superText=="BE":
-				print("block was skipped because it is a Bedrock Edition Exclusive")
-				continue
+
+		# #check that this is not a BE only block
+		# if len(block.find_all('sup'))!=0:
+		# 	#there is a superscript, check if it is BE
+		# 	superText = block.sup.i.span.a.text
+		# 	if superText=="BE":
+		# 		print("block was skipped because it is a Bedrock Edition Exclusive")
+		# 		continue
+
 		#find data for this block
 		imageUrl = block.find_all("a")[0]['href']
 		blockLinkTag = block.find_all("a")[1]  # returns the a tag that contains the link to its page
 		pageUrl = blockLinkTag['href']
+		# Check if blockName is in namesToSkip
 		blockName = blockLinkTag.contents[0]
+		if blockName in namesToSkip:
+			print("Skipped " + blockName)
+			continue
+
 		print(blockIndex, " ", blockName)  #debug
 		# get data from block's page
 		blockInfo = get_block_info("https://minecraft.wiki" + pageUrl, findVersionRemoved=findVersionRemoved)
@@ -270,12 +340,13 @@ def add_blocks_from_div(blocksDiv, writer, numAnalyze=0, numSkip=0, findVersionR
 	return [leftAnalyze, leftSkip]
 def get_block_info(link, parameterShift=3, findVersionRemoved=False):
 	#returns [is_redirect, redirect_url, version_added, version_removed,
-	#obtainable, craftable, rarity_tier, renewable, stackable, tool, blast_resistance,
+	#rarity_tier, renewable, stackable, tool, blast_resistance,
 	#hardness, luminous, transparent, waterloggable, flammable, catches_fire_from_lava]
 	#initialize blockInfo (info box info appended later)
-	blockInfo = [False, link, "?", "?", "?", "?"]
+	blockInfo = [False, link, "?", "?"]
 	#navigate the block's page
-	req = requests.get(link, allow_redirects=True)
+	headers = {'User-Agent' : 'MowBot/1.0 (winter@starcrossonline.com)',}
+	req = requests.get(link, allow_redirects=True, headers=headers)
 	contents = req.text
 	soup = BeautifulSoup(contents, 'html.parser')
 	#check if there is a redirect
@@ -295,7 +366,7 @@ def get_block_info(link, parameterShift=3, findVersionRemoved=False):
 		blockInfo.extend(infoBoxInfo)
 	#return the needed data as a list
 	return blockInfo
-def get_block_info_box_info(infoBox, parameterShift=9):
+def get_block_info_box_info(infoBox, parameterShift=7):
 	# returns [rarity_tier, renewable, stackable, tool, blast_resistance,
 	# hardness, luminous, transparent, waterloggable, flammable, catches_fire_from_lava]
 	info = ["?", "?", "?", "?", "?", "?", "?", "?", "?", "?", "?"]
@@ -441,53 +512,17 @@ def is_version_valid(version,edition):
 def get_canonical_link(soup):#returns the link after a redirect on minecraftwiki
 	canonical = soup.find('link', {'rel': 'canonical'})
 	return canonical['href']
-
-#create versions csv funcs
-def create_version_history_csv(firstVersionLink, numAnalyze=0):
-	#cycles through the java version pages and records each version name in order in a csv
-	#create the output csv
-	with open("versions.csv", 'w', newline='') as file:
-		writer = csv.writer(file)
-		#generate header line of csv
-		field = ["version name", "version Index"]
-		writer.writerow(field)
-		link = firstVersionLink
-		keepgoing=True
-		linkIndex = 0
-		while keepgoing:
-			req = requests.get(link)
-			contents = req.text
-			soup = BeautifulSoup(contents, 'html.parser')
-			# print(soup.prettify())
-			versionName = get_version_name(soup)
-			print(linkIndex, " ", versionName)#debug
-			writer.writerow([versionName, linkIndex])
-			nextLink = get_next_version_link(soup)
-			if nextLink==False:
-				keepgoing = False
-			link = nextLink
-
-			linkIndex+=1
-			if numAnalyze and (linkIndex>numAnalyze):
-				keepgoing = False
-	print("versions.csv successfully created!")
-def get_version_name(soup):
-	return soup.find(id="firstHeading").text
-def get_next_version_link(soup):
-	wikiPrefix = "https://minecraft.wiki"
-	versionLinkTags = soup.find(class_="infobox-footer").find_all('a')
-	bestFoundLink = ""
-	for tag in versionLinkTags:
-		tagText = tag.text
-		if ("►" in tagText) and not ("►►" in tagText):
-			return wikiPrefix + tag['href']
-		elif "►►" in tagText:
-			bestFoundLink = wikiPrefix + tag['href']
-	if bestFoundLink:
-		#this clause is here for the pages that have only ►► links with no single arrow
-		return bestFoundLink
-	print("no next link found")
-	return False
+def get_names_in_csv(fileName="all_items.csv"):
+	# Get a list of the items from all_items.csv
+	names = []
+	with open(fileName, 'r', newline="") as file:
+		reader = csv.reader(file)
+		for row in reader:
+			if row[0]=='Name':
+				# Skip the header row
+				continue
+			names.append(row[0])
+	return names
 
 if __name__=="__main__":
 	main()

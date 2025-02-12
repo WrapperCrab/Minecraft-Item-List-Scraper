@@ -73,6 +73,7 @@ function create_blocks_table(){
         versionAddedID mediumint(9),
         versionRemovedID mediumint(9),
         obtainableType tinyint(9),
+        iconPath varchar(255),
         PRIMARY KEY (id)
     ) {$charset_collate}";
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
@@ -90,6 +91,14 @@ function create_blocks_table(){
         $versionRemovedID = get_version_id($blockData[6]);
         //find obtainableType
         $obtainableType = get_obtainable_type($blockData[18],$blockData[19]);
+
+        //find iconPath and check that it exists
+        $iconPath = get_icon_path($blockData[0]);
+        if (!file_exists(WP_CONTENT_DIR . '/plugins/minecraft-list-by-W/Icons/' . $iconPath)){
+            //This icon is not on mowinpeople. Use default
+            $iconPath = get_icon_path();
+        }
+
         //insert this block
         global $wpdb;
         $wpdb->insert(
@@ -99,6 +108,7 @@ function create_blocks_table(){
                 'versionAddedID' => $versionAddedID,
                 'versionRemovedID' => $versionRemovedID,
                 'obtainableType' => $obtainableType,
+                'iconPath' => $iconPath,
                 )
         );
     }
@@ -115,6 +125,7 @@ function create_items_table(){
         versionAddedID mediumint(9),
         versionRemovedID mediumint(9),
         obtainableType tinyint(9),
+        iconPath varchar(255),
         PRIMARY KEY (id)
     ) {$charset_collate}";
     require_once(ABSPATH . 'wp-admin/includes/upgrade.php');
@@ -132,6 +143,14 @@ function create_items_table(){
         $versionRemovedID = get_version_id($itemData[6]);
         // find obtainableType
         $obtainableType = get_obtainable_type($itemData[14],$itemData[15]);//Out of bounds error?
+
+        //find iconPath and check that it exists
+        $iconPath = get_icon_path($itemData[0]);
+        if (!file_exists(WP_CONTENT_DIR . '/plugins/minecraft-list-by-W/Icons/' . $iconPath)){
+            //This icon is not on mowinpeople. Use default
+            $iconPath = get_icon_path();
+        }
+
         //insert this item
         global $wpdb;
         $wpdb->insert(
@@ -141,6 +160,7 @@ function create_items_table(){
                 'versionAddedID' => $versionAddedID,
                 'versionRemovedID' => $versionRemovedID,
                 'obtainableType' => $obtainableType,
+                'iconPath' => $iconPath,
                 )
         );
     }
@@ -184,8 +204,26 @@ function get_obtainable_type($obtainableText,$encounterableText){
     else if ($encounterable){return 2;}
     else{return 3;}
 }
+function get_icon_path($name=""){
+    //Returns the path to this item's icon.
+    //only includes path inside of the Icons folder, so should just be a png file name
+    if (empty($name)){
+        return "default.png";
+    }
+    return $name . '.png';
+}
 
 function get_item_names($versionFilterType="all_items",$versionValue=999,$includeBlocks=true,$includeItems=true,
+        $includeObtainable=true,$includeUnobtainableButEncounterable=false,$includeUnencounterable=false,
+        $sortingValues=[["alphabetical",true,"ascending",1]],$includeSQL=false,$debugValues=[]){
+
+    $info = get_item_information($versionFilterType,$versionValue,$includeBlocks,$includeItems,
+            $includeObtainable,$includeUnobtainableButEncounterable,$includeUnencounterable,
+            $sortingValues,$includeSQL,$debugValues);
+    $names = $info[0];
+    return $names;
+}
+function get_item_information($versionFilterType="all_items",$versionValue=999,$includeBlocks=true,$includeItems=true,
         $includeObtainable=true,$includeUnobtainableButEncounterable=false,$includeUnencounterable=false,
         $sortingValues=[["alphabetical",true,"ascending",1]],$includeSQL=false,$debugValues=[]){
     global $wpdb;
@@ -202,20 +240,23 @@ function get_item_names($versionFilterType="all_items",$versionValue=999,$includ
     $sql .= $neededItemsQuery;
     switch ($versionFilterType){
         case "all_items":
-            $sql .= " SELECT name FROM neededItems ";
+            $sql .= " SELECT * FROM neededItems ";
             break;
         case "exists_in_version":
             $sql .= ", " . get_added_items_query($versionValue,$versionTableName);
             $sql .= ", " . get_not_removed_items_query($versionValue,$versionTableName);
-            $sql .= " SELECT name FROM (addedItems NATURAL JOIN notRemovedItems) ";
+
+            $sql .= " SELECT addedItems.* FROM (addedItems JOIN notRemovedItems
+            ON (addedItems.name = notRemovedItems.name)) ";//!!I don't fully understand why this works. On id equality results in every item showing up twice
+
             break;
         case "added_in_version":
             $sql .= ", " . get_newly_added_items_query($versionValue, $versionTableName);
-            $sql .= " SELECT name FROM addedItems ";
+            $sql .= " SELECT * FROM addedItems ";
             break;
         case "removed_in_version":
             $sql .= ", " . get_newly_removed_items_query($versionValue, $versionTableName);
-            $sql .= " SELECT name FROM removedItems ";
+            $sql .= " SELECT * FROM removedItems ";
             break;
         default:
             //This should never happen
@@ -260,19 +301,31 @@ function get_item_names($versionFilterType="all_items",$versionValue=999,$includ
 
     $sql .= ";";
     $result = $wpdb->get_results($sql);
-    $names=[];
+
+    $info = [[],[],[],[],[]];//[$names,$versionAddedIDs,$versionRemovedIDs,$obtainableTypes,$iconPaths]
     foreach ($result as $item){
-        $names[] = $item->name;
-        // $versionsAdded[] = $item->versionAdded;
+        $info[0][] = $item->name;
+        $info[1][] = $item->versionAddedID;
+        $info[2][] = $item->versionRemovedID;
+        $info[3][] = $item->obtainableType;
+        $info[4][] = $item->iconPath;
     }
     //debug stuff
     if ($includeSQL){
-        $names[] = $sql;
+        $info[0][] = $sql;
+        $info[1][] = 0;
+        $info[2][] = 0;
+        $info[3][] = 0;
+        $info[4][] = "";
     }
     foreach ($debugValues as $value){
-        $names[] = $value;
+        $info[0][] = $value;
+        $info[1][] = 0;
+        $info[2][] = 0;
+        $info[3][] = 0;
+        $info[4][] = "";
     }
-    return $names;
+    return $info;
 }
 
 function get_needed_items_query($includeBlocks, $includeItems, $includeObtainable,
@@ -283,7 +336,7 @@ function get_needed_items_query($includeBlocks, $includeItems, $includeObtainabl
     //Create the Query
     $sql = " neededItems AS (";
     if ($includeBlocks){
-        $sql .= "SELECT name, versionAddedID, versionRemovedID FROM {$blockTableName}";
+        $sql .= "SELECT * FROM {$blockTableName}";
         $sql .= " WHERE (";
         $oneTypeIncluded = false;
         if ($includeObtainable){
@@ -313,7 +366,7 @@ function get_needed_items_query($includeBlocks, $includeItems, $includeObtainabl
         $sql .= " UNION ";
     }
     if ($includeItems===true){
-        $sql .= "SELECT name, versionAddedID, versionRemovedID FROM {$itemTableName}";
+        $sql .= "SELECT * FROM {$itemTableName}";
         $sql .= " WHERE (";
         $oneTypeIncluded = false;
         if ($includeObtainable){
@@ -345,7 +398,7 @@ function get_needed_items_query($includeBlocks, $includeItems, $includeObtainabl
 function get_added_items_query($versionValue, $versionTableName){
     //get table of neededItems names added before or at $version
     $sql = "addedItems AS
-        (SELECT neededItems.name, neededItems.versionAddedID FROM neededItems
+        (SELECT neededItems.* FROM neededItems
         LEFT JOIN {$versionTableName}
         ON neededItems.versionAddedID={$versionTableName}.id
         WHERE ({$versionTableName}.value<={$versionValue}) OR (neededItems.versionAddedID IS NULL))";
@@ -354,7 +407,7 @@ function get_added_items_query($versionValue, $versionTableName){
 function get_newly_added_items_query($versionValue, $versionTableName){
     //get table of neededItems names added at $version
     $sql = "addedItems AS
-        (SELECT neededItems.name, neededItems.versionAddedID FROM neededItems
+        (SELECT neededItems.* FROM neededItems
         LEFT JOIN {$versionTableName}
         ON neededItems.versionAddedID={$versionTableName}.id
         WHERE ({$versionTableName}.value IS NOT NULL) AND ({$versionTableName}.value={$versionValue}))";
@@ -363,7 +416,7 @@ function get_newly_added_items_query($versionValue, $versionTableName){
 function get_newly_removed_items_query($versionValue, $versionTableName){
     //get table of neededItems names removed in $version
     $sql = "removedItems AS
-        (SELECT neededItems.name, neededItems.versionAddedID FROM neededItems
+        (SELECT neededItems.* FROM neededItems
         LEFT JOIN {$versionTableName}
         ON neededItems.versionRemovedID={$versionTableName}.id
         WHERE ({$versionTableName}.value IS NOT NULL) AND ({$versionTableName}.value={$versionValue}))";
@@ -372,7 +425,7 @@ function get_newly_removed_items_query($versionValue, $versionTableName){
 function get_not_removed_items_query($versionValue, $versionTableName){
     //get table of neededItems names removed after $version
     $sql = "notRemovedItems AS
-        (SELECT neededItems.name, neededItems.versionAddedID FROM neededItems
+        (SELECT neededItems.* FROM neededItems
         LEFT JOIN {$versionTableName}
         ON neededItems.versionRemovedID={$versionTableName}.id
         WHERE ({$versionTableName}.value>{$versionValue}) OR (neededItems.versionRemovedID IS NULL))";
@@ -394,16 +447,16 @@ function get_versions($ascending){
 //html funcs
 function show_minecraft_list(){
     ob_start();
-    $names = get_item_names();
-    // $names = get_item_names("all_items",999,true,
+    $info = get_item_information();
+    // $info = get_item_information("all_items",999,true,
     //         true,true,false,false,
     //         [["alphabetical",true,"ascending",1]],true,[]);
-    update_option('list',$names);
+    update_option('list',$info[0]);
     $versions = get_versions(false);
-    create_minecraft_list_html($names,$versions);
+    create_minecraft_list_html($info,$versions);
     return ob_get_clean();
 }
-function create_minecraft_list_html($names, $versions, $numColumns=1){
+function create_minecraft_list_html($info, $versions, $numColumns=1){
     ?>
     <head>
         <style>
@@ -659,22 +712,27 @@ function create_minecraft_list_html($names, $versions, $numColumns=1){
         </div>
         <div id="minecraft_list_container" class="table-container">
             <table id="minecraft_list" cellpadding="5">
-                <?php echo get_minecraft_list_table_html($names,$numColumns)?>
+                <?php echo get_minecraft_list_table_html($info,$numColumns)?>
             </table>
         </div>
     </body>
     <?php
 }
-function get_minecraft_list_table_html($names,$numColumns){
+function get_minecraft_list_table_html($info, $numColumns){
     $tableHtml = "";
     $keepgoing = true;
     $nameIndex = 0;
+
+    $names = $info[0];
+    $iconPaths = $info[4];
+
     $numNames = count($names);
     $name = $names[$nameIndex];
+    $iconPath = "https://www.mowinpeople.com/wp-content/plugins/minecraft-list-by-W/Icons/" . $iconPaths[$nameIndex];
     while ($keepgoing){
         $tableHtml .= '<tr>';
         for ($i=0;$i<$numColumns;$i++){
-            $tableHtml .= '<td>' . $name . '</td>';
+            $tableHtml .= '<td>' . '<img src="'.$iconPath.'">' . ' ' . $name . '</td>';
             //go to next name
             $nameIndex++;
             if ($nameIndex>=$numNames){
@@ -682,6 +740,7 @@ function get_minecraft_list_table_html($names,$numColumns){
                 break;
             }
             $name = $names[$nameIndex];
+            $iconPath = "https://www.mowinpeople.com/wp-content/plugins/minecraft-list-by-W/Icons/" . $iconPaths[$nameIndex];
         }
         $tableHtml .= '</tr>';
     }
@@ -704,11 +763,14 @@ function generate_minecraft_list_table_html_ajax(){
     $sortingValues = get_filtered_sorting_values([$alphabeticalSortValues,$nameLengthSortValues,$ageSortValues]);
 
     $numColumns = (int)$_POST['numColumns'];
-    $names = get_item_names($versionFilterType,$versionValue,$includeBlocks,$includeItems,
+
+
+    $info = get_item_information($versionFilterType,$versionValue,$includeBlocks,$includeItems,
             $includeObtainable,$includeUnobtainableButEncounterable,$includeUnencounterable,
             $sortingValues,false,[]);
+    $names = $info[0];
     update_option('list',$names);
-    echo get_minecraft_list_table_html($names,$numColumns);
+    echo get_minecraft_list_table_html($info,$numColumns);
     wp_die();
 }
 function get_names_ajax(){

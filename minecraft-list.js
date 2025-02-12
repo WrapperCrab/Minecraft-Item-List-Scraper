@@ -1,8 +1,8 @@
-var copyText = "";
-
 jQuery(document).ready(function($){
     // update_list();
-    copyText = generate_list_copy_text();
+    sessionStorage.setItem("numColumns",1);
+    update_names();
+
     update_version_dropdown();
     update_sorting_options("alphabetical");
     update_sorting_options("name_length");
@@ -27,12 +27,12 @@ jQuery(document).ready(function($){
         update_num_columns();
     });
     jQuery('#copy_to_clipboard').click(function($){
-        navigator.clipboard.writeText(copyText);
+        navigator.clipboard.writeText(names_to_copy_text(JSON.parse(sessionStorage.getItem("names"))));
         alert("list copied to clipboard");
     });
     jQuery('#export_to_csv').click(function($){
         //create and download a csv from the data currently in the table
-        var csvData = create_csv_data_from_table("#minecraft_list");
+        var csvData = create_csv_data();
         download_csv_file(csvData);
     });
 });
@@ -93,7 +93,7 @@ function update_list(){
         },
         success:function(response){
             jQuery("#minecraft_list").html(response);
-            copyText = generate_list_copy_text();
+            update_names();
         },
         error:function(errorObject, exception){
             console.log(exception);
@@ -151,55 +151,76 @@ function update_sorting_options(sortType){
     }
 }
 function update_num_columns(){
-    var numColumns = jQuery('#num_columns').val();
-    if ((!/^[0-9]*$/.test(numColumns)) || (/^0*$/.test(numColumns))) {
+    var numColumnsText = jQuery('#num_columns').val();
+    var newNumColumns = 1;
+    if ((!/^[0-9]*$/.test(numColumnsText)) || (/^0*$/.test(numColumnsText))) {
         //this is invalid input check if it can be rounded to nearest integer
-        var betterValue = parseFloat(numColumns).toFixed(0);
+        var betterValue = parseFloat(numColumnsText).toFixed(0);
         if (isNaN(betterValue) || betterValue<=0){
+            newNumColumns = 1;
             jQuery('#num_columns').val("1");
         }else{
-            jQuery('#num_columns').val(betterValue.toString());
+            newNumColumns = parseInt(betterValue);
+            jQuery('#num_columns').val(betterValue);
         }
+    }else{
+        newNumColumns = parseInt(numColumnsText);
     }
+    sessionStorage.setItem('numColumns',newNumColumns);
 }
 
-function generate_list_copy_text(){
-    //get the array of names from php
+function update_names(){
+    //update the sessionStorage variable names
     var names = new Array();
-    var copyText = "";
     jQuery.ajax({
         type:"POST",
         url: ajax_object.ajaxurl,
         data:{
             action: 'get_names',
         },
-        async: false,//!!This is bad practice on the main thread
         success:function(response){
             names = JSON.parse(response);
+            sessionStorage.setItem("names",JSON.stringify(names));
         }
     });
+}
+
+function names_to_copy_text(names){
+    var copyText = "";
     for (var i=0;i<names.length;i++){
         var name = names[i];
         copyText += name + "\n";
     }
     return copyText;
 }
-function create_csv_data_from_table(tableID){
+
+function create_csv_data(){
+    //get names and num columns from session storage
+    var names = JSON.parse(sessionStorage.getItem("names"));
+    var numColumns = Number(sessionStorage.getItem("numColumns"));
+
+    //put the data into csv formatted array
     var csvData = [];
-    var rows = jQuery(tableID).children('tr');
-    for (let i=0; i<rows.length; i++){
-        var csvRow = [];
-        var row = rows.eq(i);
-        var cells = row.children('td');
-        for (let j=0; j<cells.length; j++){
-            csvRow.push(cells.eq(j).text());
+    var nameIndex=0;
+    while (nameIndex<names.length){
+        //create a row
+        var row = [];
+        for (let i=0; i<numColumns; i++){
+            if (nameIndex+i<names.length){
+                row.push(names[nameIndex+i]);
+            }else{
+                row.push("");
+            }
         }
-        csvData.push(csvRow.join(","));
+        //append the formatted row to csvData
+        csvData.push(row.join(","));
+        //increment nameIndex
+        nameIndex+=numColumns;
     }
-    csvData = csvData.join("\n");
-    console.log(csvData);
-    return csvData;
+    //return formatted csvData
+    return csvData.join("\n");
 }
+
 function download_csv_file(csvData){
     //create csv from data
     csvFile = new Blob([csvData], {type: "text/csv"});
