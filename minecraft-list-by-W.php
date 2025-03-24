@@ -208,21 +208,19 @@ function get_icon_path($name=""){
     return $name . '.png';
 }
 
-#!!!Will need new params $startVersion and $endVersion
-function get_item_names($versionFilterType="all_items",$versionValue=999,$includeBlocks=true,$includeItems=true,
-        $includeObtainable=true,$includeUnobtainableButEncounterable=false,$includeUnencounterable=false,
-        $sortingValues=[["alphabetical",true,"ascending",1]],$includeSQL=false,$debugValues=[]){
+function get_item_names($versionFilterType="all_items",$versionValue=999,$startVersionValue=999,$endVersionValue=999,
+        $includeBlocks=true,$includeItems=true,$includeObtainable=true,$includeUnobtainableButEncounterable=false,
+        $includeUnencounterable=false,$sortingValues=[["alphabetical",true,"ascending",1]],$includeSQL=false,$debugValues=[]){
 
-    $info = get_item_information($versionFilterType,$versionValue,$includeBlocks,$includeItems,
-            $includeObtainable,$includeUnobtainableButEncounterable,$includeUnencounterable,
-            $sortingValues,$includeSQL,$debugValues);
+    $info = get_item_information($versionFilterType,$versionValue,$startVersionValue,$endVersionValue,
+            $includeBlocks,$includeItems,$includeObtainable,$includeUnobtainableButEncounterable,
+            $includeUnencounterable,$sortingValues,$includeSQL,$debugValues);
     $names = $info[0];
     return $names;
 }
-#!!!Will need new params $startVersion and $endVersion, rework $versionFilterType behavior for "added" and "removed"
-function get_item_information($versionFilterType="all_items",$versionValue=999,$includeBlocks=true,$includeItems=true,
-        $includeObtainable=true,$includeUnobtainableButEncounterable=false,$includeUnencounterable=false,
-        $sortingValues=[["alphabetical",true,"ascending",1]],$includeSQL=false,$debugValues=[]){
+function get_item_information($versionFilterType="all_items",$versionValue=999,$startVersionValue=999,$endVersionValue=999,
+        $includeBlocks=true,$includeItems=true,$includeObtainable=true,$includeUnobtainableButEncounterable=false,
+        $includeUnencounterable=false,$sortingValues=[["alphabetical",true,"ascending",1]],$includeSQL=false,$debugValues=[]){
     global $wpdb;
     $blockTableName = $wpdb->prefix . "MinecraftBlocks";
     $itemTableName = $wpdb->prefix . "MinecraftItems";
@@ -247,12 +245,12 @@ function get_item_information($versionFilterType="all_items",$versionValue=999,$
             ON (addedItems.name = notRemovedItems.name)) ";//!!I don't fully understand why this works. On id equality results in every item showing up twice. Why doesn't that happen here?
 
             break;
-        case "added_in_version": #!!!Name and behavior will change
-            $sql .= ", " . get_newly_added_items_query($versionValue, $versionTableName);
+        case "added_in_version":
+            $sql .= ", " . get_added_items_in_range_query($startVersionValue, $endVersionValue, $versionTableName);
             $sql .= " SELECT * FROM addedItems ";
             break;
-        case "removed_in_version": #!!!Name and behavior will change
-            $sql .= ", " . get_newly_removed_items_query($versionValue, $versionTableName);
+        case "removed_in_version":
+            $sql .= ", " . get_removed_items_in_range_query($startVersionValue, $endVersionValue, $versionTableName);
             $sql .= " SELECT * FROM removedItems ";
             break;
         default:
@@ -401,24 +399,26 @@ function get_added_items_query($versionValue, $versionTableName){
         WHERE ({$versionTableName}.value<={$versionValue}) OR (neededItems.versionAddedID IS NULL))";
     return $sql;
 }
-#!!!Change to get added items between 2 versions
-function get_newly_added_items_query($versionValue, $versionTableName){
-    //get table of neededItems names added at $version
+function get_added_items_in_range_query($startVersionValue, $endVersionValue, $versionTableName){
+    //get table of neededItems names added between $starVersion and $endVersion
     $sql = "addedItems AS
         (SELECT neededItems.* FROM neededItems
         LEFT JOIN {$versionTableName}
         ON neededItems.versionAddedID={$versionTableName}.id
-        WHERE ({$versionTableName}.value IS NOT NULL) AND ({$versionTableName}.value={$versionValue}))";
+        WHERE ({$versionTableName}.value IS NOT NULL)
+        AND ({$versionTableName}.value>={$startVersionValue})
+        AND ({$versionTableName}.value<={$endVersionValue}))";//!!!Does this work?
     return $sql;
 }
-#!!!Change to get removed items between 2 versions
-function get_newly_removed_items_query($versionValue, $versionTableName){
+function get_removed_items_in_range_query($startVersionValue, $endVersionValue, $versionTableName){
     //get table of neededItems names removed in $version
     $sql = "removedItems AS
         (SELECT neededItems.* FROM neededItems
         LEFT JOIN {$versionTableName}
         ON neededItems.versionRemovedID={$versionTableName}.id
-        WHERE ({$versionTableName}.value IS NOT NULL) AND ({$versionTableName}.value={$versionValue}))";
+        WHERE ({$versionTableName}.value IS NOT NULL)
+        AND ({$versionTableName}.value>={$startVersionValue})
+        AND ({$versionTableName}.value<={$endVersionValue}))";//!!!Does this work?
     return $sql;
 }
 function get_not_removed_items_query($versionValue, $versionTableName){
@@ -448,9 +448,6 @@ function show_minecraft_list(){
     ob_start();
     wp_enqueue_script('minecraft-list-js');
     $info = get_item_information();
-    // $info = get_item_information("all_items",999,true,
-    //         true,true,false,false,
-    //         [["alphabetical",true,"ascending",1]],true,[]);
     $versions = get_versions(false);
     create_minecraft_list_html($info,$versions);
     return ob_get_clean();
@@ -781,6 +778,8 @@ function generate_minecraft_list_table_html_ajax(){
     $includeUnencounterable = string_to_bool($_POST['includeUnencounterable']);
 
     $versionValue = (int)$_POST['versionValue'];
+    $startVersionValue = (int)$_POST['startVersionValue'];
+    $endVersionValue = (int)$_POST['endVersionValue'];
     $versionFilterType= $_POST['versionFilterType'];
 
     $alphabeticalSortValues = ['alphabetical',string_to_bool($_POST['sortAlphabetical']),$_POST['alphabeticalDirection'],(int)$_POST['alphabeticalPriority']];
@@ -790,9 +789,9 @@ function generate_minecraft_list_table_html_ajax(){
 
     $numColumns = (int)$_POST['numColumns'];
 
-    $info = get_item_information($versionFilterType,$versionValue,$includeBlocks,$includeItems,
-            $includeObtainable,$includeUnobtainableButEncounterable,$includeUnencounterable,
-            $sortingValues,false,[]);
+    $info = get_item_information($versionFilterType,$versionValue,$startVersionValue,$endVersionValue,
+            $includeBlocks,$includeItems,$includeObtainable,$includeUnobtainableButEncounterable,
+            $includeUnencounterable,$sortingValues,false,[]);
     $names = $info[0];
     $wantedData = [get_minecraft_list_table_html($info,$numColumns), $names];
     echo json_encode($wantedData);

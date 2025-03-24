@@ -46,12 +46,13 @@ jQuery(document).ready(function($){
         download_csv_file(csvData);
     });
 });
-//!!! Must take input from StartVersion and EndVersion
 function update_list(){
     //Show the loading gif
     jQuery('#loading_icon').show();
     //get data from input elements
     var versionValue = jQuery('#minecraft_version').find(":selected").val();
+    var startVersionValue = jQuery('#start_minecraft_version').find(":selected").val();
+    var endVersionValue = jQuery('#end_minecraft_version').find(":selected").val();
     var versionFilterType = jQuery("input[type='radio'][name=version_filter]:checked").val();
 
     var showBlocks = jQuery('#item_type_1').is(":checked");
@@ -87,6 +88,8 @@ function update_list(){
             'includeUnencounterable':showUnencounterable,
 
             'versionValue':versionValue,
+            'startVersionValue':startVersionValue,
+            'endVersionValue':endVersionValue,
             'versionFilterType':versionFilterType,
 
             'sortAlphabetical':sortAlphabetical,
