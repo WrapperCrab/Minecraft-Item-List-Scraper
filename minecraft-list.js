@@ -106,7 +106,7 @@ function update_list(){
             jQuery('#loading_icon').hide();
         },
         error:function(errorObject, exception){
-            console.log(exception);
+            console.log(exception);//!!!Being triggered on other pages
         }
     });
 }

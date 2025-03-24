@@ -12,7 +12,7 @@ add_action('wp_enqueue_scripts','minecraft_list_js_init');
 function minecraft_list_js_init(){
     //load the scripts needed for the plugin
     wp_register_script('minecraft-list-js',"https://www.mowinpeople.com/wp-content/plugins/minecraft-list-by-W/minecraft-list.js",array('jquery'));
-    wp_enqueue_script('minecraft-list-js');
+    // wp_enqueue_script('minecraft-list-js');//!!Instead done in shortcode function. Only call js when needed
     wp_localize_script('minecraft-list-js','ajax_object',array('ajaxurl' => admin_url('admin-ajax.php')));
 }
 //let ajax call functions
@@ -443,6 +443,7 @@ function get_versions($ascending){
 //html funcs
 function show_minecraft_list(){
     ob_start();
+    wp_enqueue_script('minecraft-list-js');
     $info = get_item_information();
     // $info = get_item_information("all_items",999,true,
     //         true,true,false,false,
