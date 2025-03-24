@@ -12,7 +12,6 @@ add_action('wp_enqueue_scripts','minecraft_list_js_init');
 function minecraft_list_js_init(){
     //load the scripts needed for the plugin
     wp_register_script('minecraft-list-js',"https://www.mowinpeople.com/wp-content/plugins/minecraft-list-by-W/minecraft-list.js",array('jquery'));
-    // wp_enqueue_script('minecraft-list-js');//!!Instead done in shortcode function. Only call js when needed
     wp_localize_script('minecraft-list-js','ajax_object',array('ajaxurl' => admin_url('admin-ajax.php')));
 }
 //let ajax call functions
@@ -209,6 +208,7 @@ function get_icon_path($name=""){
     return $name . '.png';
 }
 
+#!!!Will need new params $startVersion and $endVersion
 function get_item_names($versionFilterType="all_items",$versionValue=999,$includeBlocks=true,$includeItems=true,
         $includeObtainable=true,$includeUnobtainableButEncounterable=false,$includeUnencounterable=false,
         $sortingValues=[["alphabetical",true,"ascending",1]],$includeSQL=false,$debugValues=[]){
@@ -219,6 +219,7 @@ function get_item_names($versionFilterType="all_items",$versionValue=999,$includ
     $names = $info[0];
     return $names;
 }
+#!!!Will need new params $startVersion and $endVersion, rework $versionFilterType behavior for "added" and "removed"
 function get_item_information($versionFilterType="all_items",$versionValue=999,$includeBlocks=true,$includeItems=true,
         $includeObtainable=true,$includeUnobtainableButEncounterable=false,$includeUnencounterable=false,
         $sortingValues=[["alphabetical",true,"ascending",1]],$includeSQL=false,$debugValues=[]){
@@ -243,14 +244,14 @@ function get_item_information($versionFilterType="all_items",$versionValue=999,$
             $sql .= ", " . get_not_removed_items_query($versionValue,$versionTableName);
 
             $sql .= " SELECT addedItems.* FROM (addedItems JOIN notRemovedItems
-            ON (addedItems.name = notRemovedItems.name)) ";//!!I don't fully understand why this works. On id equality results in every item showing up twice
+            ON (addedItems.name = notRemovedItems.name)) ";//!!I don't fully understand why this works. On id equality results in every item showing up twice. Why doesn't that happen here?
 
             break;
-        case "added_in_version":
+        case "added_in_version": #!!!Name and behavior will change
             $sql .= ", " . get_newly_added_items_query($versionValue, $versionTableName);
             $sql .= " SELECT * FROM addedItems ";
             break;
-        case "removed_in_version":
+        case "removed_in_version": #!!!Name and behavior will change
             $sql .= ", " . get_newly_removed_items_query($versionValue, $versionTableName);
             $sql .= " SELECT * FROM removedItems ";
             break;
@@ -400,6 +401,7 @@ function get_added_items_query($versionValue, $versionTableName){
         WHERE ({$versionTableName}.value<={$versionValue}) OR (neededItems.versionAddedID IS NULL))";
     return $sql;
 }
+#!!!Change to get added items between 2 versions
 function get_newly_added_items_query($versionValue, $versionTableName){
     //get table of neededItems names added at $version
     $sql = "addedItems AS
@@ -409,6 +411,7 @@ function get_newly_added_items_query($versionValue, $versionTableName){
         WHERE ({$versionTableName}.value IS NOT NULL) AND ({$versionTableName}.value={$versionValue}))";
     return $sql;
 }
+#!!!Change to get removed items between 2 versions
 function get_newly_removed_items_query($versionValue, $versionTableName){
     //get table of neededItems names removed in $version
     $sql = "removedItems AS
@@ -419,7 +422,7 @@ function get_newly_removed_items_query($versionValue, $versionTableName){
     return $sql;
 }
 function get_not_removed_items_query($versionValue, $versionTableName){
-    //get table of neededItems names removed after $version
+    //get table of neededItems names removed after $version or never removed
     $sql = "notRemovedItems AS
         (SELECT neededItems.* FROM neededItems
         LEFT JOIN {$versionTableName}
@@ -456,95 +459,95 @@ function create_minecraft_list_html($info, $versions, $numColumns=1){
     ?>
     <head>
         <style>
-        table{
-            table-layout: fixed;
-            border-collapse: collapse;
-            /* display: block; */
-        }
-        td {
-            border: 1px solid black;
-            width: 160px;
-            min-width: 160px;
-            font-size: 1vw;
-            text-align: center;
-        }
-        h1, h2, h3 {
-            text-align: center;
-        }
-        p {
-            /* font-size: 1.17em; */
-            text-align: center;
-            /* margin-top: 0.1em;
-            margin-bottom: 0.1em;
-            margin-left: 0;
-            margin-right: 0; */
-            /* margin:0; */
-        }
-        select {
-            /* display: block; */
-            /* margin: 0 auto; */
-            /* padding:0px; */
-        }
-        fieldset {
-            padding-top: 1em;
-            padding-bottom: 1em;
-            margin-top: 0em;
-            margin-bottom: 0em;
-            text-align:center;
-        }
-        fieldset legend{
-            padding-top: 0em;
-            padding-bottom: 0em;
-            margin-top: 0em;
-            margin-bottom: 0em;
-        }
-        fieldset p{
-            padding-top: 0em;
-            padding-bottom: 0em;
-            margin-top: 0em;
-            margin-bottom: 0em;
-        }
-        .radio-label .checkbox-label {
-            text-align: center;
-            vertical-align: top;
-            margin-right: 5em;
-            /* margin-right: 3%; */
-            /* padding:0px; */
-        }
-        .radio-input .checkbox-input {
-            text-align: center;
-            vertical-align: top;
-            margin-left: 5em;
-            /* padding:0px; */
-        }
-        .table-container{
-            overflow-x: scroll;
-        }
-        .center-container{
-            /* display:block; */
-            display:flex;
-            align-items: center;
-            justify-content: center;
-            gap: 20px;
-            margin-top:0px;
-            margin-bottom:0px;
-            padding-top:0px;
-            padding-bottom:0px;
-        }
-        .right-container{
-            display:flex;
-            justify-content: flex-end;
-            margin-top:0.5em;
-            margin-bottom:0.5em;
-            padding-top:0px;
-            padding-bottom:0px;
-        }
-        .disabled{
-            opacity: 0.2;
-        }
-        *:disabled{
-            opacity: 0.2;
-        }
+            table{
+                table-layout: fixed;
+                border-collapse: collapse;
+                /* display: block; */
+            }
+            td {
+                border: 1px solid black;
+                width: 160px;
+                min-width: 160px;
+                font-size: 1vw;
+                text-align: center;
+            }
+            h1, h2, h3 {
+                text-align: center;
+            }
+            p {
+                /* font-size: 1.17em; */
+                text-align: center;
+                /* margin-top: 0.1em;
+                margin-bottom: 0.1em;
+                margin-left: 0;
+                margin-right: 0; */
+                /* margin:0; */
+            }
+            select {
+                /* display: block; */
+                /* margin: 0 auto; */
+                /* padding:0px; */
+            }
+            fieldset {
+                padding-top: 1em;
+                padding-bottom: 1em;
+                margin-top: 0em;
+                margin-bottom: 0em;
+                text-align:center;
+            }
+            fieldset legend{
+                padding-top: 0em;
+                padding-bottom: 0em;
+                margin-top: 0em;
+                margin-bottom: 0em;
+            }
+            fieldset p{
+                padding-top: 0em;
+                padding-bottom: 0em;
+                margin-top: 0em;
+                margin-bottom: 0em;
+            }
+            .radio-label .checkbox-label {
+                text-align: center;
+                vertical-align: top;
+                margin-right: 5em;
+                /* margin-right: 3%; */
+                /* padding:0px; */
+            }
+            .radio-input .checkbox-input {
+                text-align: center;
+                vertical-align: top;
+                margin-left: 5em;
+                /* padding:0px; */
+            }
+            .table-container{
+                overflow-x: scroll;
+            }
+            .center-container{
+                /* display:block; */
+                display:flex;
+                align-items: center;
+                justify-content: center;
+                gap: 20px;
+                margin-top:0px;
+                margin-bottom:0px;
+                padding-top:0px;
+                padding-bottom:0px;
+            }
+            .right-container{
+                display:flex;
+                justify-content: flex-end;
+                margin-top:0.5em;
+                margin-bottom:0.5em;
+                padding-top:0px;
+                padding-bottom:0px;
+            }
+            .disabled{
+                opacity: 0.2;
+            }
+            *:disabled{
+                opacity: 0.2;
+            }
         </style>
     </head>
     <body>
@@ -570,7 +573,7 @@ function create_minecraft_list_html($info, $versions, $numColumns=1){
                 </div>
             </div>
             <br>
-            <p>Version:
+            <p id="minecraft_version_paragraph">Version:
                 <select name="minecraft_version" id="minecraft_version">
                     <?php
                     foreach ($versions as $version){?>
@@ -580,6 +583,28 @@ function create_minecraft_list_html($info, $versions, $numColumns=1){
                     ?>
                 </select>
             </p>
+
+            <p id="start_minecraft_version_paragraph" hidden>Start Version:
+                <select name="start_minecraft_version" id="start_minecraft_version">
+                    <?php
+                    foreach ($versions as $version){?>
+                        <option value=<?php echo $version->value?>><?php echo $version->name?></option>
+                    <?php
+                    }
+                    ?>
+                </select>
+            </p>
+            <p id="end_minecraft_version_paragraph" hidden>End Version:
+                <select name="end_minecraft_version" id="end_minecraft_version">
+                    <?php
+                    foreach ($versions as $version){?>
+                        <option value=<?php echo $version->value?>><?php echo $version->name?></option>
+                    <?php
+                    }
+                    ?>
+                </select>
+            </p>
+
         </fieldset>
         <fieldset>
             <legend>Item Type Filter Options</legend>
@@ -764,7 +789,6 @@ function generate_minecraft_list_table_html_ajax(){
     $sortingValues = get_filtered_sorting_values([$alphabeticalSortValues,$nameLengthSortValues,$ageSortValues]);
 
     $numColumns = (int)$_POST['numColumns'];
-
 
     $info = get_item_information($versionFilterType,$versionValue,$includeBlocks,$includeItems,
             $includeObtainable,$includeUnobtainableButEncounterable,$includeUnencounterable,

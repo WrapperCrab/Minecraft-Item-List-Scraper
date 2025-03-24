@@ -16,6 +16,14 @@ jQuery(document).ready(function($){
     jQuery("input[type='radio'][name=version_filter]").click(function($){
         update_version_dropdown();
     });
+    //Update StartVersion and EndVersion to have valid value when one is set
+    jQuery("#start_minecraft_version").change(function($){
+        update_version_dropdown(false, true);
+    });
+    jQuery("#end_minecraft_version").change(function($){
+        update_version_dropdown(true, false);
+    });
+
     jQuery('#alphabetical_sort').click(function($){
         update_sorting_options("alphabetical");
     });
@@ -38,7 +46,7 @@ jQuery(document).ready(function($){
         download_csv_file(csvData);
     });
 });
-
+//!!! Must take input from StartVersion and EndVersion
 function update_list(){
     //Show the loading gif
     jQuery('#loading_icon').show();
@@ -106,15 +114,39 @@ function update_list(){
             jQuery('#loading_icon').hide();
         },
         error:function(errorObject, exception){
-            console.log(exception);//!!!Being triggered on other pages
+            console.log(exception);
         }
     });
 }
-function update_version_dropdown(){
+function update_version_dropdown(makeStartValid = false, makeEndValid = false){
     var versionFilterType = jQuery("input[type='radio'][name=version_filter]:checked").val();
     var disableDropdown = (versionFilterType=="all_items");
     jQuery("#minecraft_version").prop('disabled',disableDropdown);
+
+    var useVersionRange = (versionFilterType=="added_in_version" || versionFilterType=="removed_in_version")
+    jQuery("#minecraft_version_paragraph").prop('hidden', useVersionRange);
+    jQuery("#start_minecraft_version_paragraph").prop('hidden', !useVersionRange);
+    jQuery("#end_minecraft_version_paragraph").prop('hidden', !useVersionRange);
+
+    //Make start or end valid
+    if (makeStartValid){
+        var startVersionValue = parseInt(jQuery('#start_minecraft_version').find(":selected").val());
+        var endVersionValue = parseInt(jQuery('#end_minecraft_version').find(":selected").val());
+        if (startVersionValue > endVersionValue){
+            //Set StartVersion dropdown to the same value as EndVersion, making it valid
+            jQuery('#start_minecraft_version').val(endVersionValue);
+        }
+    }else if (makeEndValid){
+        var startVersionValue = parseInt(jQuery('#start_minecraft_version').find(":selected").val());
+        var endVersionValue = parseInt(jQuery('#end_minecraft_version').find(":selected").val());
+        if (startVersionValue > endVersionValue){
+            //Set EndVersion dropdown to the same value as StartVersion, making it valid
+            jQuery('#end_minecraft_version').val(startVersionValue);
+        }
+    }
+
 }
+
 function update_sorting_options(sortType){
     switch(sortType){
         case "alphabetical":
