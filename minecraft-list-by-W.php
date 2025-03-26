@@ -407,7 +407,7 @@ function get_added_items_in_range_query($startVersionValue, $endVersionValue, $v
         ON neededItems.versionAddedID={$versionTableName}.id
         WHERE ({$versionTableName}.value IS NOT NULL)
         AND ({$versionTableName}.value>={$startVersionValue})
-        AND ({$versionTableName}.value<={$endVersionValue}))";//!!!Does this work?
+        AND ({$versionTableName}.value<={$endVersionValue}))";
     return $sql;
 }
 function get_removed_items_in_range_query($startVersionValue, $endVersionValue, $versionTableName){
@@ -418,7 +418,7 @@ function get_removed_items_in_range_query($startVersionValue, $endVersionValue, 
         ON neededItems.versionRemovedID={$versionTableName}.id
         WHERE ({$versionTableName}.value IS NOT NULL)
         AND ({$versionTableName}.value>={$startVersionValue})
-        AND ({$versionTableName}.value<={$endVersionValue}))";//!!!Does this work?
+        AND ({$versionTableName}.value<={$endVersionValue}))";
     return $sql;
 }
 function get_not_removed_items_query($versionValue, $versionTableName){

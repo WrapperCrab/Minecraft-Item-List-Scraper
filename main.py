@@ -6,12 +6,12 @@ def main():
 	blocksLink = "https://minecraft.wiki/w/Block"
 	itemsLink = "https://minecraft.wiki/w/Item"
 	firstVersionLink = "https://minecraft.wiki/w/Cave_game_tech_test"
-	newVersionLink = "https://minecraft.wiki/w/Java_Edition_1.21.3"
+	newVersionLink = "https://minecraft.wiki/w/Java_Edition_1.21.5"
 
 	# create_items_csv(itemsLink, namesToSkip=get_names_in_csv("all_items.csv"))
-	create_blocks_csv(blocksLink, namesToSkip=get_names_in_csv("all_blocks.csv"))
+	# create_blocks_csv(blocksLink, namesToSkip=get_names_in_csv("all_blocks.csv"))
 	# create_items_csv(itemsLink)
-	# create_version_history_csv(newVersionLink, startingVersionIndex=324)
+	# create_version_history_csv(newVersionLink, startingVersionIndex=326)
 
 blockValueDict = {#attribute title: index in blockInfo
 	"Name": 0,
@@ -278,7 +278,7 @@ def create_blocks_csv(link, numAnalyze=0, numSkip=0, namesToSkip=[]):
 		blocksDiv = soup.find(id="List_of_blocks").parent.find_next_sibling('div')
 		technicalBlocksDiv = soup.find(id="Technical_blocks").parent.find_next_sibling('div').find_next_sibling('div')
 		# educationBlocksDiv = soup.find(id="Education_Edition_Exclusive").parent.next_sibling.next_sibling
-		outrightRemovedBlocksDiv = soup.find(id="Removed_blocks").parent.find_next_sibling('div')
+		outrightRemovedBlocksDiv = soup.find(id="Outright_removed_blocks").parent.find_next_sibling('div')
 		# substitutionRemovedBlocksDiv = soup.find(id="Removed_through_substitution").parent.next_sibling.next_sibling
 		# metadataVariantBlocksDiv = soup.find(id="Extreme_metadata_variants").parent.next_sibling.next_sibling
 		# jokeBlocksDiv = soup.find(id="Joke_blocks").parent.next_sibling.next_sibling
