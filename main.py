@@ -6,12 +6,12 @@ def main():
 	blocksLink = "https://minecraft.wiki/w/Block"
 	itemsLink = "https://minecraft.wiki/w/Item"
 	firstVersionLink = "https://minecraft.wiki/w/Cave_game_tech_test"
-	newVersionLink = "https://minecraft.wiki/w/Java_Edition_1.21.5"
+	newVersionLink = "https://minecraft.wiki/w/Java_Edition_1.21.6"
 
-	# create_items_csv(itemsLink, namesToSkip=get_names_in_csv("all_items.csv"))
-	# create_blocks_csv(blocksLink, namesToSkip=get_names_in_csv("all_blocks.csv"))
+	create_items_csv(itemsLink, namesToSkip=get_names_in_csv("all_items.csv"))
+	create_blocks_csv(blocksLink, namesToSkip=get_names_in_csv("all_blocks.csv"))
 	# create_items_csv(itemsLink)
-	# create_version_history_csv(newVersionLink, startingVersionIndex=326)
+	# create_version_history_csv(newVersionLink, startingVersionIndex=327)
 
 blockValueDict = {#attribute title: index in blockInfo
 	"Name": 0,

@@ -5,8 +5,8 @@ import requests
 
 def main():
     print("starting download")
-    # download_images("blocks.csv", True)
-    # download_images("items.csv", False)
+    download_images("blocks.csv", True)
+    download_images("items.csv", False)
     print("images finished downloading")
 
 def download_images(csvPath, isBlocks=True, numDownload=0):
