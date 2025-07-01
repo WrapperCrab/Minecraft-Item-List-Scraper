@@ -695,7 +695,7 @@ function create_minecraft_list_html($info, $versions, $numColumns=1){
             <div class="center-container">
                 <div style="min-width:175px; max-width:175px; text-align:left;">
                     <input type="checkbox" class="checkbox-input" id="age_sort" value="age_sort">
-                    <label for="age_sort" class="checkbox-label">Version First Added</label>
+                    <label for="age_sort" class="checkbox-label">Version Added</label>
                 </div>
                 <div style="min-width:150px; max-width:150px;">
                     <input type="radio" class="radio-input" id="age_sort_ascending" name="age_sort_direction" value="ascending" checked>
